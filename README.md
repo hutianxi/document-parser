@@ -10,11 +10,11 @@
 
 | 项目信息 | 值 |
 | --- | --- |
-| Maven 坐标 | `io.github.hutianxi:document-parser:1.1.1` |
+| Maven 坐标 | `cn.net.tianxi:document-parser:1.1.1` |
 | Java 包 | `cn.net.tianxi.document` |
 | 语言级别 | Java 8（Aspose 用 `jdk16` classifier 的构件） |
 | 底层技术 | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12，API 与行为以 [docs.aspose.com](https://docs.aspose.com) 为准 |
-| 产物 | 普通库 jar（`document-parser-1.1.1.jar`，55790 字节、30 个条目、17 个 class，含 `META-INF/LICENSE` 与 `META-INF/NOTICE`），无 Spring 容器、无命令行入口 |
+| 产物 | 普通库 jar（`document-parser-1.1.1.jar`，56275 字节、30 个条目、17 个 class，含 `META-INF/LICENSE` 与 `META-INF/NOTICE`），无 Spring 容器、无命令行入口 |
 | 测试 | JUnit 5，183 个测试全过（其中 1 条是 `-Ddoc` 入口，平时跳过） |
 | 开源许可 | [Apache License 2.0](LICENSE)：可免费使用、修改、商用、再分发，**须保留原作者署名**（见 [NOTICE](NOTICE)），欢迎提 PR（见 [CONTRIBUTING.md](CONTRIBUTING.md)） |
 | 代码仓库 | GitHub [`hutianxi/document-parser`](https://github.com/hutianxi/document-parser)｜Gitee [`mailtianxi/document-parser`](https://gitee.com/mailtianxi/document-parser) |
@@ -133,7 +133,7 @@ document-parser/
 
 ```xml
 <dependency>
-    <groupId>io.github.hutianxi</groupId>
+    <groupId>cn.net.tianxi</groupId>
     <artifactId>document-parser</artifactId>
     <version>1.1.1</version>
 </dependency>
@@ -424,7 +424,7 @@ pptx 样例里所有文字都压在 5 个字符以内，正是因为评估模式
 给使用方的**署名写法**（放你自己的 `NOTICE`、「关于」页或 README 里，一行就够）：
 
 ```
-本产品包含 document-parser 的代码（io.github.hutianxi:document-parser），
+本产品包含 document-parser 的代码（cn.net.tianxi:document-parser），
 Copyright 2026 hutianxi，Apache License 2.0，
 原项目地址 https://github.com/hutianxi/document-parser
 ```
@@ -651,7 +651,7 @@ OOXML（docx/pptx）是压缩包，解压后全量进内存，压缩比极高的
 
 ```
 mvn -B clean test          # JAVA_HOME 指向 JDK 8；本轮实测 183 个测试全过（1 条 -Ddoc 入口跳过）
-mvn -B clean package       # 产物 target/document-parser-1.1.1.jar（55790 字节、30 个条目、17 个 class，
+mvn -B clean package       # 产物 target/document-parser-1.1.1.jar（56275 字节、30 个条目、17 个 class，
                            # 类直接放在 jar 根目录的 cn/net/tianxi/document/ 下；
                            # prepare-package 阶段会把根目录的 LICENSE 与 NOTICE 复制进 META-INF/，
                            # 所以只拿到 jar 的使用方也看得到署名与第三方授权说明）
@@ -678,15 +678,19 @@ repackage 会把主构件原地换成 fat jar（日志 `Replacing main artifact 
 （javadoc 包）+ `maven-gpg-plugin`（签名）+ `central-publishing-maven-plugin`（打包并上传到 Central Portal）。
 平时 `mvn clean test/package` 不带这个 profile，所以构建速度和本地仓库都不受影响。
 
-**坐标为什么是 `io.github.hutianxi`**：Central 要求 `groupId` 属于你已验证的命名空间。Portal 上验证通过的是
-GitHub 型命名空间 `io.github.hutianxi`（按验证码建一个同名公开仓库即可，几分钟过），所以 `groupId` 用它。
-**Java 包名仍然是 `cn.net.tianxi.document`**——Central 只校验 `groupId` 与命名空间是否匹配，不要求它和包名一致，
-所以源码不用动。域名型命名空间 `cn.net.tianxi` 需要在 `tianxi.net.cn` 的 DNS 上加一条 Portal 给的 TXT 记录，
-拿到该域名的 DNS 控制权之后可以补注册，再把 `groupId` 换回去（那是个不兼容变更，需要升版本号并公告）。
+**坐标为什么是 `cn.net.tianxi`**：Central 要求 `groupId` 属于你在 Portal 上已验证的命名空间。本项目的
+`cn.net.tianxi` 是**域名型命名空间**（Org: Tianxi，状态 Verified），验证方式是在 `tianxi.net.cn` 的 DNS 上
+加一条 Portal 给出的 TXT 记录；它与 Java 包名 `cn.net.tianxi.document` 天然一致，源码不用动。
 
-**签名密钥**：RSA 4096，key id `41AF7E29CB53074D`，指纹 `5BBC2118BD5BC8805B65F69041AF7E29CB53074D`，
-公钥已推到 `keyserver.ubuntu.com`（用 `https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<指纹>` 取回，
-实测 HTTP 200、4019 字节的 PGP PUBLIC KEY BLOCK）。Central 校验签名时会去公钥服务器查这把公钥，查不到就打回。
+> 历史说明：1.1.1 首次上传时 `cn.net.tianxi` 还没验证完，先用 GitHub 型命名空间发过一次
+> `io.github.hutianxi:document-parser:1.1.1`。Central 的构件一旦 Publish 就**不能删也不能改**，所以那个坐标
+> 会一直留在中央仓库里；本项目后续版本只发 `cn.net.tianxi`，请用上面 5.1 节的坐标。
+
+**签名密钥**：RSA 4096，主密钥 key id `41AF7E29CB53074D`、指纹 `5BBC2118BD5BC8805B65F69041AF7E29CB53074D`，
+实际签名可能落在它的子密钥 `21AAF067632A8E6A`（指纹 `CCE99252368722C3498F8B9021AAF067632A8E6A`）上，
+`gpg --verify` 实测 `Good signature`。主密钥与子密钥都已推到 `keyserver.ubuntu.com`
+（用 `https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<指纹>` 取回，两者实测都是 HTTP 200）。
+Central 校验签名时会去公钥服务器查这把公钥，查不到就打回。
 本机这把私钥**没有口令**（为了让构建能全自动跑）；要加口令：`gpg --edit-key 41AF7E29CB53074D` → `passwd`，
 之后构建时把口令配在 settings.xml 的 `<server><id>gpg</id><passphrase>` 里。
 
@@ -698,13 +702,13 @@ GitHub 型命名空间 `io.github.hutianxi`（按验证码建一个同名公开�
 mvn -B -P release deploy -DskipPublishing=true      # 版本号不能带 -SNAPSHOT
 ```
 
-产出 `target/central-publishing/central-bundle.zip`（实测 205092 字节、24 个条目）：
-`io/github/hutianxi/document-parser/1.1.1/` 下的 `document-parser-1.1.1.jar`、`-sources.jar`、`-javadoc.jar`、`.pom`
-各带一个 `.asc` 签名和 `md5/sha1/sha256/sha512` 四个校验和。
+产出 `target/central-publishing/central-bundle.zip`（实测 266857 字节、24 个条目）：
+`cn/net/tianxi/document-parser/1.1.1/` 下的 `document-parser-1.1.1.jar`（56275 字节）、`-sources.jar`（64964 字节）、
+`-javadoc.jar`（141571 字节）、`.pom`，各带一个 `.asc` 签名和 `md5/sha1/sha256/sha512` 四个校验和。
 
-然后到 Portal → **Publishing → Publish Component**：填 Deployment Name（如 `document-parser 1.1.1`）与描述，
-Choose File 选这个 zip，点 Publish Component。提交后 Deployments 列表里出现一条 **VALIDATING** 记录
-（本次的 Deployment ID 是 `1b15def3-b13f-47e7-9d6d-007bc2670d89`），校验通过后同一行会出现 **Publish** 按钮，
+然后到 Portal → **Publishing → Publish Component**：填 Deployment Name（如 `document-parser 1.1.1 (cn.net.tianxi)`）
+与描述，Choose File 选这个 zip，点 Publish Component。提交后 Deployments 列表里出现一条 **VALIDATING** 记录
+（本次的 Deployment ID 是 `960f618b-cb17-4cb1-9d40-96849df2a219`），校验通过后同一行会出现 **Publish** 按钮，
 点它才真正公开。
 
 两个坑（都实测踩过）：
@@ -739,7 +743,7 @@ Choose File 选这个 zip，点 Publish Component。提交后 Deployments 列表
 Publish 之后同步到 `repo1.maven.org` 需要几十分钟到几小时（搜索索引更慢），验证地址：
 
 ```
-https://repo1.maven.org/maven2/io/github/hutianxi/document-parser/1.1.1/
+https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/
 ```
 
 **使用方要知道的一件事**：Aspose 的三个构件不在 Maven Central 上，所以别人引 `document-parser` 时，
