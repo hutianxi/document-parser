@@ -1,0 +1,37 @@
+document-parser
+Copyright 2026 hutianxi (cn.net.tianxi)
+
+This product includes software developed by hutianxi.
+Project home: https://github.com/hutianxi/document-parser
+Mirror:       https://gitee.com/mailtianxi/document-parser
+
+Licensed under the Apache License, Version 2.0 (see the LICENSE file in this
+directory). You may use, modify and redistribute this software, in original or
+modified form, provided the copyright notice, this NOTICE file and the LICENSE
+file are retained, and modified files carry prominent notices stating that they
+were changed.
+
+---------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+---------------------------------------------------------------------------
+
+This project does NOT bundle, redistribute or relicense any third-party
+binary. It only declares dependencies; the artifacts are downloaded from
+their own repositories at build time:
+
+  * Aspose.Words for Java, Aspose.PDF for Java, Aspose.Slides for Java
+    (version 23.12, classifier "jdk16") -- commercial software by Aspose Pty Ltd,
+    distributed under the Aspose End User License Agreement, NOT under the
+    Apache License 2.0. Artifacts are fetched from https://repository.aspose.com/repo/.
+    You must obtain your own Aspose license to use them in production; without a
+    license the libraries run in evaluation mode and the output is incomplete
+    (see README section 12). License files (aspose-*.lic) are secrets and must
+    never be committed to this repository or redistributed.
+
+  * Jackson Databind (com.fasterxml.jackson.core:jackson-databind) -- Apache License 2.0.
+
+  * JUnit 5 / spring-boot-starter-test (test scope only) -- Eclipse Public License 2.0
+    and Apache License 2.0 respectively; not part of the runtime artifact.
+
+Trademark note: "Aspose" is a trademark of Aspose Pty Ltd. Its use here is
+nominative only, to identify the dependency; it does not imply endorsement.

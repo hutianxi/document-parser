@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <!-- 只借用它的依赖版本管理（java.version、jackson、JUnit 5），产物是普通库 jar，没有 Spring 启动类 -->
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.18</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>cn.net.tianxi</groupId>
+    <artifactId>document-parser</artifactId>
+    <version>1.1.1</version>
+    <name>document-parser</name>
+    <description>文档解析模块：把 Word/PDF/PPT 统一解析成文本、表格、图片三个集合</description>
+    <url>https://github.com/hutianxi/document-parser</url>
+    <inceptionYear>2026</inceptionYear>
+
+    <!-- 下面四段（licenses / developers / scm / issueManagement）是发布到 Maven Central 的硬性要求，
+         缺任何一段 central-publishing-maven-plugin 的校验都会不通过 -->
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+            <comments>可自由使用、修改、再分发，须保留 LICENSE 与 NOTICE 里的原作者署名</comments>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>hutianxi</id>
+            <name>hutianxi</name>
+            <email>67693982+hutianxi@users.noreply.github.com</email>
+            <url>https://github.com/hutianxi</url>
+            <roles>
+                <role>Owner</role>
+                <role>Developer</role>
+            </roles>
+            <timezone>+8</timezone>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/hutianxi/document-parser.git</connection>
+        <developerConnection>scm:git:https://github.com/hutianxi/document-parser.git</developerConnection>
+        <url>https://github.com/hutianxi/document-parser</url>
+        <tag>HEAD</tag>
+    </scm>
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/hutianxi/document-parser/issues</url>
+    </issueManagement>
+
+    <properties>
+        <java.version>1.8</java.version>
+        <!-- Aspose 各产品同版本线，jdk16 classifier 才是 Java 8 可用的字节码 -->
+        <aspose.version>23.12</aspose.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>AsposeJavaAPI</id>
+            <name>Aspose Java API</name>
+            <url>https://repository.aspose.com/repo/</url>
+        </repository>
+    </repositories>
+    <dependencies>
+        <!-- WordParser 序列化 JSON 用 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.aspose</groupId>
+            <artifactId>aspose-words</artifactId>
+            <version>${aspose.version}</version>
+            <classifier>jdk16</classifier>
+        </dependency>
+
+        <!-- PdfParser：PDF 文本、表格（TableAbsorber）、图片 -->
+        <dependency>
+            <groupId>com.aspose</groupId>
+            <artifactId>aspose-pdf</artifactId>
+            <version>${aspose.version}</version>
+            <classifier>jdk16</classifier>
+        </dependency>
+
+        <!-- PptParser：PPT/PPTX 文本、表格、图片 -->
+        <dependency>
+            <groupId>com.aspose</groupId>
+            <artifactId>aspose-slides</artifactId>
+            <version>${aspose.version}</version>
+            <classifier>jdk16</classifier>
+        </dependency>
+
+        <!-- 测试框架（JUnit 5）；本模块没有 Spring 容器相关的代码 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 把 LICENSE 与 NOTICE 复制进 jar 的 META-INF：署名跟着构件走，
+                 只拿到 jar（而不是整个仓库）的使用方也看得到原作者信息与第三方授权说明 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-license-notice</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/META-INF</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}</directory>
+                                    <includes>
+                                        <include>LICENSE</include>
+                                        <include>NOTICE</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- 发布到 Maven Central 才用得到的一整套：源码包、javadoc 包、GPG 签名、上传插件。
+         平时构建（mvn clean test / package）不带这个 profile，所以下面这几个插件在不在本地仓库都无所谓。
+         跑发布命令需要联网：mvn -P release -DskipTests=false clean deploy -->
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <!-- Central 要求同时上传 -sources.jar -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.2.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- Central 要求同时上传 -javadoc.jar；doclint 规则与 README 第 17 节里手跑的 javadoc 命令一致 -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <configuration>
+                            <encoding>UTF-8</encoding>
+                            <charset>UTF-8</charset>
+                            <docencoding>UTF-8</docencoding>
+                            <additionalJOption>-Xdoclint:all,-missing</additionalJOption>
+                            <failOnError>true</failOnError>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- Central 只收 GPG 签过名的构件；密钥先 gpg -\-gen-key 生成，再 gpg -\-keyserver
+                         keyserver.ubuntu.com -\-send-keys <KEY_ID> 推上去，否则校验阶段查不到公钥。
+                         凭证写在 ~/.m2/settings.xml 的 <server><id>gpg</id> 里，不要写进本文件 -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.0.1</version>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- 走 Sonatype Central Portal（central.sonatype.com）上传，不是老的 OSSRH。
+                         settings.xml 里要有 <server><id>central</id><username>门户 Token 用户名</username>
+                         <password>门户 Token 密码</password></server>；autoPublish=false 表示先传到
+                         Portal 的 Deployments 里等人工点发布，校验失败还能删掉重来 -->
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.7.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                            <waitMaxTime>3600</waitMaxTime>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

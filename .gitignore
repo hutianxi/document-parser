@@ -1,0 +1,24 @@
+target/
+
+### Aspose 许可证：私有凭证，绝不入库 ###
+*.lic
+
+### 发布签名相关：GPG 密钥、签名文件、release 插件临时文件 ###
+*.gpg
+*.asc
+*.key
+*.secring*
+*.trustdb
+pom.xml.releaseBackup
+release.properties
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### 操作系统与日志 ###
+.DS_Store
+Thumbs.db
+*.log
