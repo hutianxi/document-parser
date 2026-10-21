@@ -746,11 +746,20 @@ Publish 之后同步到 `repo1.maven.org` 需要几十分钟到几小时（搜�
 https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/
 ```
 
+1.1.1 已经走完全流程并**实测验证过**：Portal Deployment `960f618b-cb17-4cb1-9d40-96849df2a219` 状态 PUBLISHED，
+上面这个目录列出的 jar / sources.jar / javadoc.jar 字节数与本机产物一致（56275 / 64964 / 141571）；
+再用一个**全新的空本地仓库**跑 `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.1.1 -Dtransitive=false`
+（`-Dmaven.repo.local` 指到临时目录，避免命中本机已装的同名构件），BUILD SUCCESS，下到的 jar 是
+`https://repo.maven.apache.org/maven2/cn/net/tianxi/document-parser/1.1.1/document-parser-1.1.1.jar`，
+sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148`，与 Central 上的 `.sha256`、
+本地产物、GitHub Release 附件三处完全相同。临时仓库用完已删。
+
 **使用方要知道的一件事**：Aspose 的三个构件不在 Maven Central 上，所以别人引 `document-parser` 时，
 必须像 5.1 节写的那样在自己的 pom 里声明 `https://repository.aspose.com/repo/`，否则依赖解析会失败。
 
 发完 Central 之后，顺手在 GitHub 上建 Release `v1.1.1`（tag 已经推上去了），把 jar、sources.jar、javadoc.jar
-附上，方便不用 Maven 的人直接下载。
+附上，方便不用 Maven 的人直接下载：[v1.1.1](https://github.com/hutianxi/document-parser/releases/tag/v1.1.1)
+已发布，三个附件都在 Assets 里（GitHub 侧显示的 sha256 与本地产物一致）。
 
 ## 18. 附录：修复记录（历史数字）
 
