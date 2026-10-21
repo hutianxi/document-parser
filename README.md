@@ -421,12 +421,14 @@ pptx 样例里所有文字都压在 5 个字符以内，正是因为评估模式
 | 再分发原版或修改版 | 不要用作者名义为衍生作品背书（第 6 条） |
 | 提 issue、提 PR，合并后成为贡献者 | 提交的贡献默认按同一许可授权（第 5 条），无需另签协议 |
 
-给使用方的**署名写法**（放你自己的 `NOTICE`、「关于」页或 README 里，一行就够）：
+给使用方的**署名写法**（放你自己的 `NOTICE`、「关于」页或 README 里，照抄即可。两个仓库地址都带上：
+GitHub 是主仓库，Gitee 是国内镜像，哪边能打开都能找到源码）：
 
 ```
 本产品包含 document-parser 的代码（cn.net.tianxi:document-parser），
 Copyright 2026 hutianxi，Apache License 2.0，
 原项目地址 https://github.com/hutianxi/document-parser
+镜像地址   https://gitee.com/mailtianxi/document-parser
 ```
 
 **为什么是 Apache 2.0**：需求是「免费用 + 可改 + 欢迎合并 + 必须保留原作者信息」。

@@ -4,6 +4,9 @@
 按 Apache 2.0 第 5 条，**你提交到本仓库的贡献默认也按 Apache 2.0 授权**，无需另签协议；
 署名要求见 [NOTICE](NOTICE)。
 
+代码托管在两处，内容一致：**主仓库** <https://github.com/hutianxi/document-parser>（issue 与 PR 都走这里），
+**国内镜像** <https://gitee.com/mailtianxi/document-parser>（由主仓库推送同步，方便访问不到 GitHub 的人拉代码）。
+
 ---
 
 ## 1. 环境
