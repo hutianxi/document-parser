@@ -9,7 +9,10 @@
         <version>2.7.18</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>cn.net.tianxi</groupId>
+    <!-- groupId 用 Central Portal 上已验证的 GitHub 命名空间（io.github.<用户名>）。
+         Java 包名仍然是 cn.net.tianxi.document：Central 只校验 groupId 与命名空间是否匹配，
+         不要求它和包名一致 -->
+    <groupId>io.github.hutianxi</groupId>
     <artifactId>document-parser</artifactId>
     <version>1.1.1</version>
     <name>document-parser</name>

@@ -10,7 +10,7 @@
 
 | 项目信息 | 值 |
 | --- | --- |
-| Maven 坐标 | `cn.net.tianxi:document-parser:1.1.1` |
+| Maven 坐标 | `io.github.hutianxi:document-parser:1.1.1` |
 | Java 包 | `cn.net.tianxi.document` |
 | 语言级别 | Java 8（Aspose 用 `jdk16` classifier 的构件） |
 | 底层技术 | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12，API 与行为以 [docs.aspose.com](https://docs.aspose.com) 为准 |
@@ -133,7 +133,7 @@ document-parser/
 
 ```xml
 <dependency>
-    <groupId>cn.net.tianxi</groupId>
+    <groupId>io.github.hutianxi</groupId>
     <artifactId>document-parser</artifactId>
     <version>1.1.1</version>
 </dependency>
@@ -424,7 +424,7 @@ pptx 样例里所有文字都压在 5 个字符以内，正是因为评估模式
 给使用方的**署名写法**（放你自己的 `NOTICE`、「关于」页或 README 里，一行就够）：
 
 ```
-本产品包含 document-parser 的代码（cn.net.tianxi:document-parser），
+本产品包含 document-parser 的代码（io.github.hutianxi:document-parser），
 Copyright 2026 hutianxi，Apache License 2.0，
 原项目地址 https://github.com/hutianxi/document-parser
 ```
@@ -675,18 +675,48 @@ repackage 会把主构件原地换成 fat jar（日志 `Replacing main artifact 
 ### 发布到 Maven Central
 
 `pom.xml` 里的 `release` profile 就是为此准备的：`maven-source-plugin`（源码包）+ `maven-javadoc-plugin`
-（javadoc 包）+ `maven-gpg-plugin`（签名）+ `central-publishing-maven-plugin`（上传到 Central Portal）。
+（javadoc 包）+ `maven-gpg-plugin`（签名）+ `central-publishing-maven-plugin`（打包并上传到 Central Portal）。
 平时 `mvn clean test/package` 不带这个 profile，所以构建速度和本地仓库都不受影响。
 
-前置条件（都是账号／密钥层面的准备，跟代码无关）：
+**坐标为什么是 `io.github.hutianxi`**：Central 要求 `groupId` 属于你已验证的命名空间。Portal 上验证通过的是
+GitHub 型命名空间 `io.github.hutianxi`（按验证码建一个同名公开仓库即可，几分钟过），所以 `groupId` 用它。
+**Java 包名仍然是 `cn.net.tianxi.document`**——Central 只校验 `groupId` 与命名空间是否匹配，不要求它和包名一致，
+所以源码不用动。域名型命名空间 `cn.net.tianxi` 需要在 `tianxi.net.cn` 的 DNS 上加一条 Portal 给的 TXT 记录，
+拿到该域名的 DNS 控制权之后可以补注册，再把 `groupId` 换回去（那是个不兼容变更，需要升版本号并公告）。
 
-1. 在 [central.sonatype.com](https://central.sonatype.com/) 注册账号，生成一对 **User Token**；
-2. **验证命名空间**：当前 `groupId` 是 `cn.net.tianxi`，属于「域名型命名空间」，Portal 会要求在
-   `tianxi.net.cn` 的 DNS 上加一条它给出的 TXT 记录（把 groupId 反过来读就是域名）。
-   如果这个域名不在自己手里，改用「GitHub 型命名空间」`io.github.hutianxi`——验证方式是按 Portal 给的验证码
-   建一个同名的公开仓库，几分钟就能过；代价是坐标变了，README／javadoc／依赖示例里的 `groupId` 要同步改；
-3. 生成 GPG 密钥并把公钥推到公钥服务器：`gpg --gen-key` → `gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>`；
-4. `~/.m2/settings.xml` 里配两个 `server`（凭证只放这里，**不要写进 pom**）：
+**签名密钥**：RSA 4096，key id `41AF7E29CB53074D`，指纹 `5BBC2118BD5BC8805B65F69041AF7E29CB53074D`，
+公钥已推到 `keyserver.ubuntu.com`（用 `https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<指纹>` 取回，
+实测 HTTP 200、4019 字节的 PGP PUBLIC KEY BLOCK）。Central 校验签名时会去公钥服务器查这把公钥，查不到就打回。
+本机这把私钥**没有口令**（为了让构建能全自动跑）；要加口令：`gpg --edit-key 41AF7E29CB53074D` → `passwd`，
+之后构建时把口令配在 settings.xml 的 `<server><id>gpg</id><passphrase>` 里。
+
+发布有两条路，本项目 1.1.1 走的是第一条（**不需要把 Token 落到磁盘上**）：
+
+**A. 本地打 bundle + Portal 网页上传**
+
+```
+mvn -B -P release deploy -DskipPublishing=true      # 版本号不能带 -SNAPSHOT
+```
+
+产出 `target/central-publishing/central-bundle.zip`（实测 205092 字节、24 个条目）：
+`io/github/hutianxi/document-parser/1.1.1/` 下的 `document-parser-1.1.1.jar`、`-sources.jar`、`-javadoc.jar`、`.pom`
+各带一个 `.asc` 签名和 `md5/sha1/sha256/sha512` 四个校验和。
+
+然后到 Portal → **Publishing → Publish Component**：填 Deployment Name（如 `document-parser 1.1.1`）与描述，
+Choose File 选这个 zip，点 Publish Component。提交后 Deployments 列表里出现一条 **VALIDATING** 记录
+（本次的 Deployment ID 是 `1b15def3-b13f-47e7-9d6d-007bc2670d89`），校验通过后同一行会出现 **Publish** 按钮，
+点它才真正公开。
+
+两个坑（都实测踩过）：
+
+- 跳过上传的属性名是 **`-DskipPublishing=true`**，写成 `-Dcentral.skipPublishing=true` 不生效，插件会拿占位凭证真去上传并报
+  `Deployment failed while publishing`；
+- 即使 `skipPublishing=true`，插件仍会去 `settings.xml` 读 `<server><id>central</id>`，读不到直接
+  `Unable to get publisher server properties for server id: central: NullPointerException`。
+  所以只打 bundle 也要给一段占位配置（`-s` 指到一个临时 settings 文件即可，不必污染全局配置）。
+
+**B. 命令行直传**（适合 CI）：`settings.xml` 里放 Portal 的 User Token 与 GPG 口令，然后
+`mvn -B -P release clean deploy`，插件自己上传；`autoPublish=false`，同样要去网页点 Publish。
 
 ```xml
 <servers>
@@ -697,33 +727,26 @@ repackage 会把主构件原地换成 fat jar（日志 `Replacing main artifact 
   </server>
   <server>
     <id>gpg</id>
-    <passphrase>密钥口令</passphrase>
+    <passphrase>密钥口令（本机这把无口令，留空）</passphrase>
   </server>
 </servers>
 ```
 
-然后（版本号必须是 release，不能带 `-SNAPSHOT`，当前 `1.1.1` 符合要求）：
+校验会查这些项：有没有 sources 包和 javadoc 包、pom 元数据全不全（`name`/`description`/`url`/`licenses`/
+`developers`/`scm`，本项目都已补齐）、签名能不能在公钥服务器上验通、`groupId` 是否属于已验证命名空间。
+没过就 **Drop** 掉改完重来；一旦 Publish 就撤不回，同一版本号也不能再传第二次，只能升版本号。
+
+Publish 之后同步到 `repo1.maven.org` 需要几十分钟到几小时（搜索索引更慢），验证地址：
 
 ```
-mvn -P release clean deploy     # 产出 jar + sources.jar + javadoc.jar + 各自的 .asc，上传到 Portal 的 Deployments
+https://repo1.maven.org/maven2/io/github/hutianxi/document-parser/1.1.1/
 ```
-
-`autoPublish` 配的是 `false`，所以传完不会直接公开：去 Portal 的 Deployments 页面看校验结果
-（缺 sources/javadoc、pom 元数据不全、签名查不到公钥、命名空间没验证，都会在这一步报出来），
-确认无误再点 **Publish**。真发错了，在 Portal 里 Drop 掉重来即可——一旦 Publish 就撤不回，同一版本号也不能再传第二次。
 
 **使用方要知道的一件事**：Aspose 的三个构件不在 Maven Central 上，所以别人引 `document-parser` 时，
 必须像 5.1 节写的那样在自己的 pom 里声明 `https://repository.aspose.com/repo/`，否则依赖解析会失败。
 
-> 实测状态说明：`release` profile **尚未在本机跑过**——本机 Maven 仓库是离线的，里面没有
-> `maven-javadoc-plugin`、`maven-gpg-plugin`、`central-publishing-maven-plugin`，`mvn -o` 解析不到插件，
-> 因此插件版本号是按已知稳定版填的（source 3.2.1 / javadoc 3.4.1 / gpg 3.0.1 / central-publishing 0.7.0），
-> 首次执行需要联网，具体版本以 [Central Portal 官方文档](https://central.sonatype.org/publish/publish-portal-maven-plugin/) 为准。
-> 已经实测的部分是：加了这些元数据与 profile 之后，`mvn -B -o clean package` 仍然 BUILD SUCCESS，
-> 183 个测试、0 失败、1 跳过，产物 `document-parser-1.1.1.jar` 不变。
-
-发完 Central 之后，顺手在 GitHub 上打一个 tag（`git tag -a v1.1.1 -m "1.1.1"` → `git push origin v1.1.1`）并建 Release，
-把 jar、sources.jar、javadoc.jar 附上，方便不方便用 Maven 的人直接下载。
+发完 Central 之后，顺手在 GitHub 上建 Release `v1.1.1`（tag 已经推上去了），把 jar、sources.jar、javadoc.jar
+附上，方便不用 Maven 的人直接下载。
 
 ## 18. 附录：修复记录（历史数字）
 
