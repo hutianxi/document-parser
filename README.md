@@ -5,6 +5,8 @@
 [![Maven Central](https://img.shields.io/badge/Maven%20Central-1.1.1-green.svg)](#17-构建)
 [![Tests](https://img.shields.io/badge/tests-183%20passed-brightgreen.svg)](#13-测试与质量)
 
+[中文](README.md) ｜ **English** → [README.en.md](README.en.md)
+
 > 文档解析模块：把 **Word / PDF / PPT** 统一解析成 `text`、`tables`、`images` 三个集合，
 > 三种格式返回同一套结构，换格式只换类名。
 
@@ -177,9 +179,11 @@ Word 有真正的表格对象和合并标记，PDF 只有画出来的线段和�
 document-parser/
 ├── pom.xml                                  # 普通库 jar；父 pom 只借版本管理；release profile 供发 Central 用
 ├── README.md
+├── README.en.md                             # 英文版（给审核员与非中文使用者看）
 ├── LICENSE                                  # Apache License 2.0 全文
 ├── NOTICE                                   # 原作者署名 + 第三方组件（Aspose 商业授权）说明
 ├── CONTRIBUTING.md                          # 贡献指南：环境、约定、PR 流程、许可红线
+├── docs/index.html                          # GitHub Pages 项目主页
 ├── .gitignore                               # target/、*.lic（私有凭证）、GPG 签名产物、IDEA 工程文件
 └── src
     ├── main/java/cn/net/tianxi/document

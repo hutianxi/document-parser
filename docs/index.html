@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>document-parser — Word / PDF / PPT 统一解析成 text、tables、images</title>
+<meta name="description" content="cn.net.tianxi:document-parser：把 Word / PDF / PPT 解析成同一套 text、tables、images 结构的 Java 8 库，底层 Aspose，Apache License 2.0，已发布到 Maven Central。">
+<style>
+:root{
+  --bg:#0f1115; --panel:#161a22; --panel2:#1c2129; --line:#28303c;
+  --fg:#e6e9ef; --muted:#9aa6b6; --accent:#5aa9ff; --accent2:#7ee0a8; --warn:#ffcf6b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.7;font-size:16px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+code{background:#0b0e13;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:.9em;color:#d5e3f5}
+pre{background:#0b0e13;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;font-size:.88rem;line-height:1.6}
+pre code{background:none;border:0;padding:0;color:#d5e3f5}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+header.hero{padding:56px 0 40px;border-bottom:1px solid var(--line);
+  background:radial-gradient(1200px 400px at 20% -10%,rgba(90,169,255,.18),transparent),var(--bg)}
+h1{font-size:2.3rem;margin:0 0 10px;letter-spacing:-.5px}
+.tag{color:var(--muted);font-size:1.06rem;margin:0 0 22px;max-width:760px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.badge{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 12px;font-size:.82rem;color:var(--muted)}
+.badge b{color:var(--fg);font-weight:600}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-block;border:1px solid var(--line);background:var(--panel2);color:var(--fg);
+  padding:9px 16px;border-radius:8px;font-size:.92rem;font-weight:500}
+.btn:hover{border-color:var(--accent);text-decoration:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#08111d}
+.btn.primary:hover{filter:brightness(1.08)}
+section{padding:40px 0;border-bottom:1px solid var(--line)}
+h2{font-size:1.45rem;margin:0 0 6px}
+.sub{color:var(--muted);margin:0 0 22px;font-size:.96rem}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.card h3{margin:0 0 8px;font-size:1.02rem}
+.card p{margin:0;color:var(--muted);font-size:.93rem}
+table{width:100%;border-collapse:collapse;font-size:.9rem;margin:6px 0 0}
+th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600;color:#cdd7e5;white-space:nowrap}
+td{color:var(--muted)}
+td b,td strong{color:var(--fg)}
+.scroll{overflow-x:auto}
+.note{border-left:3px solid var(--warn);background:rgba(255,207,107,.07);padding:12px 16px;border-radius:0 8px 8px 0;
+  color:#e7dcc2;font-size:.9rem;margin-top:16px}
+.kpi{display:flex;flex-wrap:wrap;gap:26px;margin-top:6px}
+.kpi div{min-width:130px}
+.kpi .n{font-size:1.7rem;font-weight:650;color:var(--accent2);line-height:1.2}
+.kpi .l{color:var(--muted);font-size:.84rem}
+ul.tight{margin:6px 0 0;padding-left:20px;color:var(--muted);font-size:.93rem}
+ul.tight li{margin-bottom:6px}
+footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
+.lang{font-size:.85rem;color:var(--muted);margin-bottom:14px}
+@media (max-width:640px){h1{font-size:1.8rem}section{padding:30px 0}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="lang">中文 ｜ <a href="https://github.com/hutianxi/document-parser/blob/main/README.en.md">English README</a></div>
+    <h1>document-parser</h1>
+    <p class="tag">
+      把 <strong>Word / PDF / PPT</strong> 统一解析成 <code>text</code>、<code>tables</code>、<code>images</code> 三个集合的 Java 8 库。
+      三种格式返回同一套结构，换格式只换类名；表格统一还原成「表头 + 行对象」，<code>headers</code> 可以直接当列清单用。
+    </p>
+    <div class="badges">
+      <span class="badge">Maven Central <b>cn.net.tianxi:document-parser:1.1.1</b></span>
+      <span class="badge">Java <b>8+</b></span>
+      <span class="badge">License <b>Apache 2.0</b></span>
+      <span class="badge">Tests <b>183 passed / 1 skipped</b></span>
+    </div>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/hutianxi/document-parser">GitHub 主仓库</a>
+      <a class="btn" href="https://gitee.com/mailtianxi/document-parser">Gitee 镜像</a>
+      <a class="btn" href="https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/">Maven Central 构件</a>
+      <a class="btn" href="https://github.com/hutianxi/document-parser/releases/tag/v1.1.1">Release v1.1.1</a>
+      <a class="btn" href="https://github.com/hutianxi/document-parser/blob/main/README.md">完整文档</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>它解决什么问题</h2>
+    <p class="sub">
+      业务上常要「把客户上传的合同、报告、汇报 PPT 里的文字和表格抽出来入库」。这三种格式的底层模型完全不同：
+      Word 有真正的表格对象和合并标记，PDF 只有画出来的线段和散落的文字，PPT 是一页页形状。
+      各写一套解析、各返回一种结构，上层就要写三份入库逻辑，改一处规则要改三个地方。
+    </p>
+    <div class="kpi">
+      <div><div class="n">1 套</div><div class="l">返回结构覆盖三种格式</div></div>
+      <div><div class="n">3 个</div><div class="l">入口类，方法签名一一对应</div></div>
+      <div><div class="n">0 处</div><div class="l">12 次解析里 headers 与行键的不一致</div></div>
+      <div><div class="n">17 个</div><div class="l">class，jar 56275 字节</div></div>
+    </div>
+    <div class="grid g3" style="margin-top:24px">
+      <div class="card">
+        <h3>格式差异关在解析器里</h3>
+        <p><code>WordParser</code> / <code>PdfParser</code> / <code>PptParser</code> 都返回 <code>Map&lt;String,Object&gt;</code>，
+           键固定是 <code>text</code> / <code>tables</code> / <code>images</code>。加一种新格式只需再写一个解析器。</p>
+      </div>
+      <div class="card">
+        <h3>headers 就是列清单</h3>
+        <p>每组表的 <code>headers</code> 逐个等于每一行的键，合并单元格一律拆开回填，所以每行键数量恒定，
+           建表、映射 DTO、写 INSERT 都不用特殊处理。</p>
+      </div>
+      <div class="card">
+        <h3>确定、无状态、不出进程</h3>
+        <p>同一份文件重复解析结果完全相同，可以写成断言进 CI；纯静态方法、可并发；不联网，
+           外链图片只记元信息不下载。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>快速开始</h2>
+    <p class="sub">Aspose 的三个构件不在 Maven Central 上，引用方需要在自己的 pom 里声明 Aspose 仓库。</p>
+<pre><code>&lt;repositories&gt;
+    &lt;repository&gt;
+        &lt;id&gt;aspose&lt;/id&gt;
+        &lt;url&gt;https://repository.aspose.com/repo/&lt;/url&gt;
+    &lt;/repository&gt;
+&lt;/repositories&gt;
+
+&lt;dependency&gt;
+    &lt;groupId&gt;cn.net.tianxi&lt;/groupId&gt;
+    &lt;artifactId&gt;document-parser&lt;/artifactId&gt;
+    &lt;version&gt;1.1.1&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+<pre><code>Map&lt;String, Object&gt; result = WordParser.parse("D:/a.docx", "销售");   // PdfParser / PptParser 同名同参
+String json = WordParser.toJson(result);</code></pre>
+    <p class="sub" style="margin-top:18px">不想写代码就想看某个文档被解析成什么样，跑仓库自带的 <code>PrintResultTest</code>（不断言、只打印）：</p>
+<pre><code>mvn -B test -Dtest=PrintResultTest
+mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/你的文档.docx"</code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>返回结构</h2>
+    <p class="sub">下面是 <code>src/test/resources/word/sales-report.docx</code> 的实测输出（默认 <code>ImageMode.META</code>，图片只有元信息）。</p>
+<pre><code>{
+  "text": "2025 年度华东区销售业绩报告\n报告页次：3 页\n归档编号：\n…",
+  "tables": [
+    { "headers": ["片区", "区域", "销售额", "回款率", "销售额-5", "回款率-6", "备注"],
+      "rows": [ { "片区": "华东大区", "区域": "上海", "销售额": "1280", "回款率": "92%",
+                  "销售额-5": "1465", "回款率-6": "95%", "备注": "超额完成" } ] }
+  ],
+  "images": [
+    { "fileName": "image-1.png", "type": "PNG", "width": 1024, "height": 768,
+      "size": 670939, "contentId": "487e915db2c53907e8c1551aeaffea235423210c" }
+  ]
+}</code></pre>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>键</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>text</code></td><td>全文段落，用 <code>\n</code> 拼接；表格里的文字不在这里重复。域代码丢掉、域缓存结果保留，软换行/分页符换成空格。</td></tr>
+        <tr><td><code>tables</code></td><td>一张物理表有几组表头就有几个元素，每个元素的 <code>rows</code> 只装属于它的数据行；<code>headers</code> 与每行键逐个相等。</td></tr>
+        <tr><td><code>images</code></td><td>元信息（文件名、类型、宽高、字节数、SHA-1 指纹 <code>contentId</code>）任何模式都给；内容去向由 <code>ImageMode</code> 决定：<code>META</code>（默认）/ <code>BASE64</code> / <code>BYTES</code> / <code>FILE</code>。</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>与 OCR 的区别</h2>
+    <p class="sub">两条完全不同的技术路线：本项目解析格式对象模型，读的是文件里本来就存着的字符数据；OCR 把页面渲染成图，从像素推断字形。</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>维度</th><th>document-parser（读文字层）</th><th>OCR（图像识别）</th></tr></thead>
+      <tbody>
+        <tr><td>输入前提</td><td>电子原生文档：Word 存的 docx、程序导出的 pdf、PowerPoint 存的 pptx</td><td>任何能变成图片的页面，<b>包括扫描件、拍照件</b></td></tr>
+        <tr><td>文字从哪来</td><td>文件内的字符数据，原样读出</td><td>从像素推断，存在误识率</td></tr>
+        <tr><td>数字与金额</td><td>与原文逐字符一致（<code>合计</code> 行读到的是域缓存值 <code>2096.30</code>/<code>1796.10</code>，183 个测试逐格断言）</td><td><code>0/O</code>、<code>1/l</code>、<code>8/B</code>、小数点这类字形易混，金额通常要人工复核</td></tr>
+        <tr><td>表格结构</td><td>拿到<b>真结构</b>：合并单元格标记、两行表头、单元格内嵌套子表都能识别并拆开回填</td><td>靠框线检测还原；无边框表、跨页断表、合并格容易错行错列</td></tr>
+        <tr><td>结果稳定性</td><td>同一份文件重复解析结果<b>完全相同</b>，可以写成断言进 CI</td><td>换引擎版本、换分辨率、换二值化参数结果会变，难做回归</td></tr>
+        <tr><td>部署形态</td><td>一个 jar + 三个 Aspose 依赖，进程内完成，不联网</td><td>一般要额外装识别引擎/模型，或把文档上传到第三方云服务</td></tr>
+        <tr><td>扫描件 / 图片型 PDF</td><td><b>读不出来</b>（没有文字层），这是文档里写明的边界</td><td>唯一可行的路线</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="note">
+      <strong>诚实边界</strong>：本页不给 OCR 的准确率或耗时数字。仓库里没有跑过任何 OCR 引擎，编不出可复现的实测值；
+      要横向对比，请拿同一批文件在两边各跑一遍再比。上表右列写的是 OCR 这条路线的<strong>固有特征</strong>，不是某个产品的实测结果。
+    </div>
+    <p class="sub" style="margin-top:22px">本项目自己的单文件耗时是实测的（三份样例，评估模式、无 <code>.lic</code>；同一份代码在 JDK 8 下连跑两轮 <code>mvn test</code>，取两轮区间）：</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>样例</th><th>大小</th><th>首次调用（含 Aspose 初始化）</th><th>之后单次解析</th></tr></thead>
+      <tbody>
+        <tr><td>docx</td><td>675208 字节</td><td>1460–1591 ms</td><td><b>23–30 ms</b></td></tr>
+        <tr><td>pdf（3 页）</td><td>184977 字节</td><td>3248–3415 ms</td><td><b>664–706 ms</b></td></tr>
+        <tr><td>pptx</td><td>679289 字节</td><td>1138–1344 ms</td><td><b>72–88 ms</b></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <ul class="tight" style="margin-top:12px">
+      <li>环境：JDK <code>1.8.0_191</code>、Maven 3.8.8、Windows 11；换 JDK 21.0.1 再测一轮量级相同（首次 2004／3530／1087 ms，之后 33／573／69 ms）。</li>
+      <li>首次调用慢是固定开销，来自每个 Aspose 产品第一次加载类和初始化许可证，同一进程内只发生一次；常驻服务跑的是「之后」那一列。</li>
+      <li>PDF 那 600 ms 上下花在 <code>TableAbsorber</code> 的几何聚类和跨页并表上，与页数、线段数量相关，不是文件体积决定的。</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>应用场景</h2>
+    <p class="sub">适合直接上的场景，以及明确不适合、需要换方案的场景。</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>场景</th><th>怎么用</th></tr></thead>
+      <tbody>
+        <tr><td>合同 / 报告 / 台账入库</td><td>客户上传的 docx 一次解析成正文 + 结构化表 + 附件图，<code>headers</code> 直接映射数据库列</td></tr>
+        <tr><td>RAG 与知识库切片</td><td><code>text</code> 做语义切片，<code>tables</code> 保留结构单独存，<code>images</code> 用 <code>ImageMode.FILE</code> 落盘再传对象存储</td></tr>
+        <tr><td>BI / 报表汇聚</td><td>下属单位交上来的同模板 Word / PDF 报表，注册表头后列名固定，直接批量入仓</td></tr>
+        <tr><td>财务与审计留痕</td><td>金额取的是文件里的原值（域缓存结果），不是识别值，可追溯</td></tr>
+        <tr><td>多格式一致性核对</td><td>同一份报告的 docx / pdf / pptx 三版逐格对比（<code>CrossFormatTest</code> 就是这么干的）</td></tr>
+        <tr><td>PPT 汇报内容归档</td><td>正片文字、表格、图片一次抽出，备注页读不到</td></tr>
+        <tr><td>扫描件 + 电子件混合的收件流程</td><td>先探一遍：<code>text</code> 与 <code>tables</code> 都空说明没有文字层，降级走 OCR。<b>这条分流判据是建议，仓库里没有扫描件样例，未做实测</b></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="grid g2" style="margin-top:20px">
+      <div class="card">
+        <h3>明确不适合</h3>
+        <ul class="tight">
+          <li>扫描件、拍照件、图片型 PDF（没有文字层，必须 OCR）</li>
+          <li>图表（Chart）里的数据、SmartArt 文字、嵌入的 Excel/Word（OLE 对象）内容</li>
+          <li>Word 的页眉页脚、脚注尾注、批注；PPT 的备注页、母版、版式页文字</li>
+          <li>需要保留版面的场景（分页位置、字体、坐标、原样转 HTML/PDF）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>已知限制</h3>
+        <ul class="tight">
+          <li>PDF 里<b>没有边框线</b>的表格会被当成普通段落进 <code>text</code></li>
+          <li>PDF 跨页断行特别高（下边界离页底超过页高 1/5）且未注册表头依据时，一张表会拆成两组</li>
+          <li>Word 导出 PDF 会重算域，缓存的 <code>SUM(ABOVE)</code> 结果会丢（要金额请用 docx）</li>
+          <li><code>BASE64</code>/<code>BYTES</code> 模式把图片字节留在结果里，图片多的文档请用 <code>FILE</code> 或 <code>META</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>实测基线</h2>
+    <p class="sub">环境：Maven 3.8.8、Windows 11、没有任何 <code>.lic</code>（三个解析器都跑在评估模式）；JDK <code>1.8.0_191</code> 与 <code>21.0.1</code> 各跑一遍完整测试，两边都是 183 个测试全过、1 条跳过。下面每个数字都是当前测试里的断言值，<code>mvn -B clean test</code> 就能复现。</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>样例</th><th><code>text</code></th><th>表头组</th><th>数据行</th><th>图片</th><th>META 结果长度</th><th>BASE64 结果长度</th></tr></thead>
+      <tbody>
+        <tr><td>docx</td><td>13 段</td><td>7</td><td>30</td><td>1 张 PNG 1024×768、670939 字节</td><td>4409 字符</td><td>899039 字符</td></tr>
+        <tr><td>pdf</td><td>空串（正文全在表格里）</td><td>6</td><td>45</td><td>1 张 JPEG 699×524、38668 字节</td><td>6186 字符</td><td>57789 字符</td></tr>
+        <tr><td>pptx</td><td>9 行（每行 ≤5 字符）</td><td>6</td><td>22</td><td>1 张 PNG 1024×768、670939 字节</td><td>3262 字符</td><td>897892 字符</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="scroll" style="margin-top:18px">
+    <table>
+      <thead><tr><th>测试类</th><th>个数</th><th>覆盖</th></tr></thead>
+      <tbody>
+        <tr><td><code>WordParserTest</code></td><td>31</td><td>docx 端到端：正文 13 段、4 张表逐格、<code>FullRow</code> 三种去向、注册表头、图片四种模式</td></tr>
+        <tr><td><code>PdfParserTest</code></td><td>17</td><td>pdf 端到端：跨页并表、纵向合并聚块、丢域结果、注册表头关掉首行兜底</td></tr>
+        <tr><td><code>PptParserTest</code></td><td>17</td><td>pptx 端到端：形状顺序、组合形状、两行表头的取舍、评估模式 5 字符自检</td></tr>
+        <tr><td><code>CrossFormatTest</code></td><td>9</td><td>三种格式横向一致性：核心表逐格相同、图片指纹、契约 12 次全查</td></tr>
+        <tr><td><code>TablesTest</code></td><td>31</td><td>表头分组算法（唯一一份）：六条判定优先级、多级表头合并、分组行三种去向</td></tr>
+        <tr><td><code>ImagesTest</code></td><td>24</td><td>图片集合（唯一一份）：编号、类型嗅探、指纹、重复图片、四种模式、文件名消毒</td></tr>
+        <tr><td><code>OptionsTest</code></td><td>10</td><td><code>Options</code> 判定语义：容忍度、关键字、静默模式、空值处理</td></tr>
+        <tr><td><code>ResultsTest</code></td><td>28</td><td>文本清洗、评估水印识别、表头归一化、JSON 序列化、<code>writeImages</code>、许可证加载</td></tr>
+        <tr><td><code>WordEdgeCasesTest</code></td><td>11</td><td>现场拼最小 docx 覆盖边角结构：内容控件、嵌套表、深度上限、纵向合并、域、软换行</td></tr>
+        <tr><td><code>PrintResultTest</code></td><td>5（1 条默认跳过）</td><td><b>不断言、只打印</b>：把解析结果原样输出到控制台</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <ul class="tight" style="margin-top:12px">
+      <li>本轮构建核对：<code>javac -Xlint:all</code> <b>0</b> 告警，<code>javadoc -Xdoclint:all,-missing</code> <b>0</b> 错误，<code>mvn -B clean package</code> BUILD SUCCESS。</li>
+      <li>整轮 <code>mvn clean test</code> 耗时：JDK 8 实测 30.8 秒、JDK 21 实测 35.2 秒。</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>许可与署名</h2>
+    <p class="sub">
+      本项目按 <a href="https://github.com/hutianxi/document-parser/blob/main/LICENSE">Apache License 2.0</a> 开源：
+      免费使用（含商业）、可修改、可做闭源衍生、可再分发，条件是分发时带上 <code>LICENSE</code> 与 <code>NOTICE</code>、
+      在被改过的文件里注明「已修改」、不要用作者名义为衍生作品背书。提 PR 无需另签协议（Apache 2.0 第 5 条）。
+    </p>
+    <p class="sub">给使用方的署名写法（放你自己的 <code>NOTICE</code>、「关于」页或 README 里，照抄即可）：</p>
+<pre><code>本产品包含 document-parser 的代码（cn.net.tianxi:document-parser），
+Copyright 2026 hutianxi，Apache License 2.0，
+原项目地址 https://github.com/hutianxi/document-parser
+镜像地址   https://gitee.com/mailtianxi/document-parser</code></pre>
+    <div class="note">
+      <strong>第三方商业依赖</strong>：本仓库不随包分发任何 Aspose 二进制，<code>pom.xml</code> 只声明依赖，构件在构建时从
+      <code>https://repository.aspose.com/repo/</code> 下载。Aspose.Words / Aspose.PDF / Aspose.Slides 是 Aspose Pty Ltd 的商业软件，
+      按 Aspose 自己的 EULA 授权，<strong>不在本项目的 Apache 2.0 覆盖范围内</strong>。生产使用请自行购买 Aspose 许可；
+      <code>.lic</code> 文件是私有凭证，<code>.gitignore</code> 已拦住，任何 PR 都不要提交它。没有 lic 时按评估模式解析，
+      三个产品的限制并不相同（详见 README 第 12.2 节）。
+    </div>
+  </div>
+</section>
+
+<section style="border-bottom:0">
+  <div class="wrap">
+    <h2>文档与链接</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>仓库</h3>
+        <ul class="tight">
+          <li><a href="https://github.com/hutianxi/document-parser">GitHub 主仓库</a>（issue 与 PR 都走这里）</li>
+          <li><a href="https://gitee.com/mailtianxi/document-parser">Gitee 国内镜像</a>（由主仓库推送同步）</li>
+          <li><a href="https://github.com/hutianxi/document-parser/releases/tag/v1.1.1">Release v1.1.1</a>（jar / sources.jar / javadoc.jar 三个附件）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>文档</h3>
+        <ul class="tight">
+          <li><a href="https://github.com/hutianxi/document-parser/blob/main/README.md">README（中文，18 节完整版）</a></li>
+          <li><a href="https://github.com/hutianxi/document-parser/blob/main/README.en.md">README (English)</a></li>
+          <li><a href="https://github.com/hutianxi/document-parser/blob/main/CONTRIBUTING.md">CONTRIBUTING 贡献指南</a></li>
+          <li><a href="https://github.com/hutianxi/document-parser/blob/main/NOTICE">NOTICE 署名与第三方组件</a></li>
+          <li><a href="https://github.com/hutianxi/document-parser/blob/main/src/main/java/cn/net/tianxi/document/package-info.java">package-info.java 包级设计说明</a></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>构件</h3>
+        <ul class="tight">
+          <li><a href="https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/">Maven Central 目录</a></li>
+          <li>jar sha256 <code>c2c47ba9…5233148</code>（与 Central、本地产物、GitHub Release 附件三处一致）</li>
+          <li>底层技术文档 <a href="https://docs.aspose.com">docs.aspose.com</a></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>贡献</h3>
+        <ul class="tight">
+          <li>Fork → 从 <code>main</code> 切分支 → <code>mvn -B clean test</code> 全绿 → 提 PR</li>
+          <li>行为变更要附修改前后的端到端 JSON 对比</li>
+          <li>两个仓库都配了保护分支：只有维护者能直接推送与合并，贡献走 PR</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p style="margin:0 0 6px">
+      document-parser ｜ Copyright 2026 hutianxi (cn.net.tianxi) ｜ Apache License 2.0
+    </p>
+    <p style="margin:0">
+      本页面上的所有数字都是仓库测试里的断言值或本机实测值，<code>mvn -B clean test</code> 可复现；
+      未实测的判据在文中已明确标注。Aspose 是 Aspose Pty Ltd 的商标与商业软件，本项目与 Aspose 无隶属或背书关系。
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
