@@ -13,7 +13,7 @@
 
 | 项 | 要求 | 说明 |
 | --- | --- | --- |
-| JDK | 8（1.8） | 源码与字节码级别都是 1.8，用高版本 JDK 编译会带上更高的 class 版本 |
+| JDK | 8 及以上 | 源码与字节码级别都是 1.8（`java.version=1.8` → `-source/-target 1.8`），所以用高版本 JDK 编译产物仍是 `major version: 52`；本机在 JDK `1.8.0_191` 与 `21.0.1` 下各跑一遍完整测试都是 183 全过、1 跳过 |
 | Maven | 3.6+（本机实测 3.8.8） | 首次构建需联网，Aspose 构件来自 `https://repository.aspose.com/repo/` |
 | 网络 | 首次必须能访问 Aspose 仓库 | 之后可用 `mvn -o` 离线构建 |
 
@@ -23,7 +23,7 @@
 ## 2. 构建与测试
 
 ```
-mvn -B clean test          # JAVA_HOME 指向 JDK 8；当前基线：183 个测试，0 失败，1 跳过（-Ddoc 入口）
+mvn -B clean test          # 当前基线：183 个测试，0 失败，1 跳过（-Ddoc 入口）；JDK 8 与 JDK 21 都实测全绿
 mvn -B clean package       # 产物 target/document-parser-1.1.1.jar
 ```
 
