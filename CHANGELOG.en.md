@@ -11,7 +11,7 @@ holds unreleased changes, they are listed in a separate section at the top.
 
 ---
 
-## 1.2.1 — 2026-10-24 (unreleased)
+## 1.2.1 — 2026-10-24
 
 ### Build / dependencies
 
@@ -29,6 +29,10 @@ holds unreleased changes, they are listed in a separate section at the top.
   and asm 9.3 no longer enter the test classpath. Public API, result structure and parsing behaviour are
   unchanged.
 
+This version is published on Maven Central (2026-10-24; Portal deployment `11cdf8ca-0884-4626-9356-c82a6455144e`,
+status PUBLISHED). The published `document-parser-1.2.1.jar` is **60777 bytes** and the `.pom` is **12136 bytes**,
+byte-identical to the local release bundle; all four `.sha256` files were checked, and the main jar's is
+`ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3` (the other three are in README.en.md §17).
 1.2.0 is published on Central, but its POM still points at Jackson 2.21.7; use 1.2.1 to get 2.21.8.
 
 ## 1.2.0 — 2026-10-23

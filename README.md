@@ -12,11 +12,11 @@
 
 | 项目信息 | 值 |
 | --- | --- |
-| Maven 坐标 | `cn.net.tianxi:document-parser:1.2.0`（Central 当前版本；`1.2.1` 待发布，只升级 Jackson 依赖） |
+| Maven 坐标 | `cn.net.tianxi:document-parser:1.2.1`（Central 当前版本，2026-10-24 发布；相对 1.2.0 只升级 Jackson 依赖） |
 | Java 包 | `cn.net.tianxi.document` |
 | 语言级别 | Java 8（Aspose 用 `jdk16` classifier 的构件） |
 | 底层技术 | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12，API 与行为以 [docs.aspose.com](https://docs.aspose.com) 为准 |
-| 产物 | 普通库 jar（1.2.0 发版产物 60236 字节；1.2.1 待发版产物在 JDK 8 下 `mvn -B clean package` 为 **60777 字节、30 个条目、17 个 class**，JDK 21 打同一份源码为 61190 字节，含 `META-INF/LICENSE` 与 `META-INF/NOTICE`；Maven Central 上的 1.1.1 是更早的 56275 字节产物；1.2.0 的发布记录见 [CHANGELOG.md](CHANGELOG.md) 与 §17），无 Spring 容器、无命令行入口 |
+| 产物 | 普通库 jar（1.2.1 发版产物 **60777 字节、30 个条目、17 个 class**，JDK 8 下 `mvn -B clean package`；JDK 21 打同一份源码为 61190 字节，含 `META-INF/LICENSE` 与 `META-INF/NOTICE`；1.2.0 是 60236 字节，1.1.1 是 56275 字节；发布记录见 [CHANGELOG.md](CHANGELOG.md) 与 §17），无 Spring 容器、无命令行入口 |
 | 测试 | JUnit 5，242 条测试、15 个测试类：241 条通过，1 条是 `-Ddoc` 入口、平时跳过 |
 | 更新日志 | [CHANGELOG.md](CHANGELOG.md)（英文 [CHANGELOG.en.md](CHANGELOG.en.md)）—— 每个版本对外可见的变化与实测数字 |
 | 开源许可 | [Apache License 2.0](LICENSE)：可免费使用、修改、商用、再分发，**须保留原作者署名**（见 [NOTICE](NOTICE)），欢迎提 PR（见 [CONTRIBUTING.md](CONTRIBUTING.md)） |
@@ -235,7 +235,7 @@ document-parser/
 
 ## 5. 快速开始
 
-> 本 README 描述的是 **1.2.1**（待发布）。相对 1.2.0，1.2.1 只把 Jackson 升到 2.21.8，修复
+> 本 README 描述的是 **1.2.1**（2026-10-24 已发布到 Central）。相对 1.2.0，1.2.1 只把 Jackson 升到 2.21.8，修复
 > CVE-2026-110879（CVE-2026-54512 的不完整修复：泛型参数与数组元素类型仍可绕过 PolymorphicTypeValidator），
 > API、返回结构与解析行为不变。相对 1.1.1，1.2.0 新增了 `source` 键、`name` 键与 `tablesByName` / `rowsByName`
 > 入口、顶层 `unmatchedHeaders` 开关，并补读了 PDF 无边框表；三个主键 `text` / `tables` / `images` 的名字、
@@ -253,7 +253,7 @@ document-parser/
 </dependency>
 ```
 
-> 1.2.1 发布前，Central 上可用的最新版是 1.2.0；只想立即使用的话把版本号换成 `1.2.0` 即可，
+> 1.2.1 已于 2026-10-24 发布到 Central；若你用的镜像站还没同步，可以暂时把版本号换成 `1.2.0`，
 > 代价是 Jackson 仍是 2.21.7。
 
 Aspose 的三个构件来自 `https://repository.aspose.com/repo/`，引用方需要在自己的 `pom.xml` 里声明这个仓库
@@ -1020,7 +1020,7 @@ Central 校验签名时会去公钥服务器查这把公钥，查不到就打回
 本机这把私钥**没有口令**（为了让构建能全自动跑）；要加口令：`gpg --edit-key 41AF7E29CB53074D` → `passwd`，
 之后构建时把口令配在 settings.xml 的 `<server><id>gpg</id><passphrase>` 里。
 
-发布有两条路，1.1.1、1.2.0 与计划中的 1.2.1 都走第一条（**不需要把 Token 落到磁盘上**）：
+发布有两条路，1.1.1、1.2.0 与 1.2.1 都走第一条（**不需要把 Token 落到磁盘上**）：
 
 **A. 本地打 bundle + Portal 网页上传**
 
@@ -1035,7 +1035,7 @@ mvn -B -P release deploy -DskipPublishing=true      # 版本号不能带 -SNAPSH
 
 然后到 Portal → **Publishing → Publish Component**：填 Deployment Name（如 `document-parser 1.2.1 (cn.net.tianxi)`）
 与描述，Choose File 选这个 zip，点 Publish Component。提交后 Deployments 列表里出现一条 **VALIDATING** 记录
-（1.1.1 那次是 `960f618b-cb17-4cb1-9d40-96849df2a219`；1.2.1 尚未上传，还没有 ID），校验通过后同一行会出现
+（1.1.1 那次是 `960f618b-cb17-4cb1-9d40-96849df2a219`；1.2.1 是 `11cdf8ca-0884-4626-9356-c82a6455144e`），校验通过后同一行会出现
 **Publish** 按钮，点它才真正公开。
 
 两个坑（都实测踩过）：
@@ -1073,19 +1073,27 @@ Publish 之后同步到 `repo1.maven.org` 需要几十分钟到几小时（搜�
 https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.1/
 ```
 
-1.1.1 已经走完全流程并**实测验证过**：Portal Deployment `960f618b-cb17-4cb1-9d40-96849df2a219` 状态 PUBLISHED，
-上面这个目录列出的 jar / sources.jar / javadoc.jar 字节数与**当时**的本机产物一致（56275 / 64964 / 141571）；
-再用一个**全新的空本地仓库**跑 `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.1.1 -Dtransitive=false`
+1.1.1 与 1.2.1 都已经走完全流程并**实测验证过**：
+
+- 1.1.1：Portal Deployment `960f618b-cb17-4cb1-9d40-96849df2a219` 状态 PUBLISHED，目录里的
+  jar / sources.jar / javadoc.jar 字节数与**当时**的本机产物一致（56275 / 64964 / 141571）；
+- 1.2.1：Portal Deployment `11cdf8ca-0884-4626-9356-c82a6455144e` 状态 PUBLISHED（2026-10-24），
+  Central 上的 jar 为 60777 字节、`.pom` 为 12136 字节、sources.jar 为 81550 字节、javadoc.jar 为 89001 字节，
+  与本机发布包一致；四份 `.sha256` 也逐个核对过 —— jar `ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3`、
+  sources `1d2fbc27afe3974036c4c6233b24577b94d7b4d014403af4caebb0b31e68420c`、
+  javadoc `94ac6f87c12143e2d122009373db6afab727a5d5ea4a36c193e49440f6f94e8c`、
+  pom `e6fda84c361fbfafc596490bc26134e25584a41f7c0cf39eec07e3c19dc78e53`。
+
+1.1.1 还用过一个**全新的空本地仓库**跑 `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.1.1 -Dtransitive=false`
 （`-Dmaven.repo.local` 指到临时目录，避免命中本机已装的同名构件），BUILD SUCCESS，下到的 jar 是
 `https://repo.maven.apache.org/maven2/cn/net/tianxi/document-parser/1.1.1/document-parser-1.1.1.jar`，
 sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148`，与 Central 上的 `.sha256`、
 本地产物、GitHub Release 附件三处完全相同。临时仓库用完已删。
 
-> **版本号与产物的一致性**：README 与 CHANGELOG 现在描述的是 **1.2.1**（待发布）。Central 上的
-> 1.2.0（主 jar 60236 字节）包含 `source`、`name`、`unmatchedHeaders` 这些键与无边框表补读，
-> 但 Jackson 仍是 2.21.7；1.2.1 只修依赖，API 与 1.2.0 完全相同。
+> **版本号与产物的一致性**：README 与 CHANGELOG 现在描述的是 **1.2.1**（2026-10-24 已发布）。Central 上的
+> 1.2.1（主 jar 60777 字节）与 1.2.0（60236 字节）API 完全相同，差别只在 Jackson 2.21.8 与 2.21.7。
 
-### 1.2.1（待发布，2026-10-24）
+### 1.2.1（2026-10-24）
 
 `pom.xml` 已升到 `1.2.1`；本机 JDK 8 `mvn -B clean package` 打出主 jar **60777 字节**
 （JDK 21 打同一份源码是 **61190 字节**）、30 个条目、17 个 class，242 条测试、1 条跳过（241 通过）。
@@ -1095,7 +1103,7 @@ JDK 8 产物是 **81550** 与 **89001** 字节（javadoc 页脚带生成时间�
 （jar 条目带构建时间戳，重打即变，发布时以 Central 上的记录为准）。
 本地已用 `-P release deploy -DskipPublishing=true` 打出 `target/central-publishing/central-bundle.zip`
 （**236990 字节、24 个文件**，sha256 `fdcd57e91f009d3c3438c95a75dce74ccda23baa327e1f52eac30ae3ab422612`），
-四个 `.asc` 均 `gpg --verify` 通过（实际签名落在子密钥 `21AAF067632A8E6A` 上）；**尚未上传**。
+四个 `.asc` 均 `gpg --verify` 通过（实际签名落在子密钥 `21AAF067632A8E6A` 上）；已上传并在 2026-10-24 发布。
 
 改动只有依赖：Jackson 2.13.5 → 2.21.8，补齐 CVE-2026-83557 / 68497 / 19032 / 89425 / 89407 / 91776，
 并修复 CVE-2026-110879 / GHSA-m8xf-2cr7-77ph（2026-10-20 发布，CVE-2026-54512 的不完整修复）。
@@ -1104,7 +1112,13 @@ JDK 8 产物是 **81550** 与 **89001** 字节（javadoc 页脚带生成时间�
 测试依赖从 `spring-boot-starter-test` 换成 `junit-jupiter`，不再把 Spring 5.3.x / logback 1.2.x 等带进测试类路径。
 对外 API、返回结构与解析行为不变。
 
-上传与验证记录：待发布；发布后在这里补 Portal Deployment ID、Central 上的字节数与 sha256。
+上传与验证记录（2026-10-24）：Portal Deployment `11cdf8ca-0884-4626-9356-c82a6455144e`，状态 **PUBLISHED**；
+`repo1.maven.org` 上 `document-parser-1.2.1.jar` 为 **60777 字节**、`.pom` 为 **12136 字节**、
+`sources.jar` 为 **81550 字节**、`javadoc.jar` 为 **89001 字节**，与本机发布包一致。四份 `.sha256` 逐个核对：
+jar `ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3`、
+sources `1d2fbc27afe3974036c4c6233b24577b94d7b4d014403af4caebb0b31e68420c`、
+javadoc `94ac6f87c12143e2d122009373db6afab727a5d5ea4a36c193e49440f6f94e8c`、
+pom `e6fda84c361fbfafc596490bc26134e25584a41f7c0cf39eec07e3c19dc78e53`。
 
 ### 1.2.0（2026-10-23）
 

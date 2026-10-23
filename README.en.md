@@ -13,11 +13,11 @@
 
 | Project | Value |
 | --- | --- |
-| Maven coordinates | `cn.net.tianxi:document-parser:1.2.0` (currently on Central; `1.2.1` is pending — dependency upgrade only) |
+| Maven coordinates | `cn.net.tianxi:document-parser:1.2.1` (currently on Central, published 2026-10-24; dependency upgrade over 1.2.0 only) |
 | Java package | `cn.net.tianxi.document` |
 | Language level | Java 8 (Aspose artifacts use the `jdk16` classifier) |
 | Underlying technology | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12; API and behaviour follow [docs.aspose.com](https://docs.aspose.com) |
-| Artifact | Plain library jar — the released 1.2.0 artifact is 60236 bytes. The pending 1.2.1 build is **60777 bytes, 30 entries and 17 classes** on JDK 8 and 61190 bytes for the same source on JDK 21 (`mvn -B clean package`), including `META-INF/LICENSE` and `META-INF/NOTICE`. The 1.1.1 on Maven Central is the earlier 56275-byte artifact; the 1.2.0 release record is in [CHANGELOG.en.md](CHANGELOG.en.md) and §17. No Spring container, no CLI entry point |
+| Artifact | Plain library jar — the released 1.2.1 artifact is **60777 bytes, 30 entries and 17 classes** on JDK 8 (`mvn -B clean package`; 61190 bytes for the same source on JDK 21), including `META-INF/LICENSE` and `META-INF/NOTICE`. 1.2.0 was 60236 bytes and 1.1.1 was 56275 bytes; release records are in [CHANGELOG.en.md](CHANGELOG.en.md) and §17. No Spring container, no CLI entry point |
 | Tests | JUnit 5, 242 tests across 15 test classes: 241 pass, 1 `-Ddoc` entry point is skipped by default |
 | Changelog | [CHANGELOG.en.md](CHANGELOG.en.md) (中文: [CHANGELOG.md](CHANGELOG.md)) — what changed in each version, with the measured numbers |
 | License | [Apache License 2.0](LICENSE): free to use, modify, use commercially and redistribute, **provided the original author attribution is kept** (see [NOTICE](NOTICE)). Pull requests welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)) |
@@ -305,7 +305,7 @@ the public surface is the three parser classes only.
 
 ## 5. Quick start
 
-> This README describes **1.2.1** (pending release). Compared with 1.2.0, 1.2.1 only raises Jackson to 2.21.8,
+> This README describes **1.2.1** (published to Central on 2026-10-24). Compared with 1.2.0, 1.2.1 only raises Jackson to 2.21.8,
 > fixing CVE-2026-110879 (an incomplete fix for CVE-2026-54512: generic arguments and array element types could
 > still bypass the PolymorphicTypeValidator); the API, result shape and parsing behaviour are unchanged.
 > Compared with 1.1.1, 1.2.0 adds the `source` key, the `name` key and the `tablesByName` / `rowsByName` entry
@@ -325,8 +325,8 @@ the public surface is the three parser classes only.
 </dependency>
 ```
 
-> Until 1.2.1 is published, the newest version available on Central is 1.2.0; if you need it right now,
-> use `1.2.0` instead — the only difference is that it still ships Jackson 2.21.7.
+> 1.2.1 was published to Central on 2026-10-24; if your mirror has not synced it yet, you can use `1.2.0`
+> for now — the only difference is that it still ships Jackson 2.21.7.
 
 The three Aspose artifacts come from `https://repository.aspose.com/repo/`, so consumers must declare
 that repository in their own `pom.xml` (this project already declares it).
@@ -1281,7 +1281,7 @@ The private key on this machine has **no passphrase** (so the build can run full
 one: `gpg --edit-key 41AF7E29CB53074D` → `passwd`, then put the passphrase in settings.xml under
 `<server><id>gpg</id><passphrase>`.
 
-There are two publishing routes; 1.1.1, 1.2.0 and the planned 1.2.1 all use the first (**it does not require putting the token on disk**):
+There are two publishing routes; 1.1.1, 1.2.0 and 1.2.1 all use the first (**it does not require putting the token on disk**):
 
 **A. Build the bundle locally + upload through the Portal web UI**
 
@@ -1297,7 +1297,7 @@ This produces `target/central-publishing/central-bundle.zip` (266857 bytes for 1
 Then go to Portal → **Publishing → Publish Component**: fill in the Deployment Name (e.g.
 `document-parser 1.2.1 (cn.net.tianxi)`) and a description, choose this zip, and click Publish Component.
 After submitting, a **VALIDATING** record appears in the Deployments list (the 1.1.1 one was
-`960f618b-cb17-4cb1-9d40-96849df2a219`; 1.2.1 has not been uploaded, so it has no ID yet); once validation
+`960f618b-cb17-4cb1-9d40-96849df2a219`; 1.2.1 is `11cdf8ca-0884-4626-9356-c82a6455144e`); once validation
 passes, a **Publish** button appears on the same row, and clicking it is what actually makes it public.
 
 Two pitfalls (both hit in practice):
@@ -1342,24 +1342,33 @@ slower). Verification URL:
 https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.1/
 ```
 
-1.1.1 went through the whole flow and was **verified by measurement**: Portal Deployment
-`960f618b-cb17-4cb1-9d40-96849df2a219` reached status PUBLISHED, and the jar / sources.jar / javadoc.jar
-byte counts listed in that directory match the local artifacts **of that build** (56275 / 64964 / 141571);
-then, using a
-**brand-new empty local repository**, `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.1.1
--Dtransitive=false` was run (`-Dmaven.repo.local` pointed at a temporary directory so it could not hit an
-already-installed artifact of the same name), giving BUILD SUCCESS, and the downloaded jar was
+1.1.1 and 1.2.1 both went through the whole flow and were **verified by measurement**:
+
+- 1.1.1: Portal Deployment `960f618b-cb17-4cb1-9d40-96849df2a219` reached status PUBLISHED, and the
+  jar / sources.jar / javadoc.jar byte counts listed in that directory match the local artifacts **of that
+  build** (56275 / 64964 / 141571);
+- 1.2.1: Portal Deployment `11cdf8ca-0884-4626-9356-c82a6455144e` reached status PUBLISHED on 2026-10-24;
+  Central serves a 60777-byte jar, a 12136-byte `.pom`, an 81550-byte sources.jar and an 89001-byte
+  javadoc.jar, matching the local release bundle. All four `.sha256` files were checked — jar
+  `ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3`, sources
+  `1d2fbc27afe3974036c4c6233b24577b94d7b4d014403af4caebb0b31e68420c`, javadoc
+  `94ac6f87c12143e2d122009373db6afab727a5d5ea4a36c193e49440f6f94e8c`, pom
+  `e6fda84c361fbfafc596490bc26134e25584a41f7c0cf39eec07e3c19dc78e53`.
+
+For 1.1.1, a **brand-new empty local repository** was also used to run
+`mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.1.1 -Dtransitive=false`
+(`-Dmaven.repo.local` pointed at a temporary directory so it could not hit an already-installed artifact
+of the same name), giving BUILD SUCCESS, and the downloaded jar was
 `https://repo.maven.apache.org/maven2/cn/net/tianxi/document-parser/1.1.1/document-parser-1.1.1.jar` with
 sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148` — identical in all three
 places: Central's `.sha256`, the local artifact and the GitHub Release attachment. The temporary
 repository was deleted afterwards.
 
-> **Version / artifact consistency**: this README and the changelog now describe **1.2.1** (pending release).
-> The 1.2.0 on Maven Central (main jar 60236 bytes) does contain the `source` / `name` / `unmatchedHeaders`
-> keys and borderless-table recovery, but still ships Jackson 2.21.7; 1.2.1 only fixes the dependency and
-> keeps the 1.2.0 API exactly.
+> **Version / artifact consistency**: this README and the changelog now describe **1.2.1** (published
+> 2026-10-24). The 1.2.1 on Central (main jar 60777 bytes) and 1.2.0 (60236 bytes) have exactly the same
+> API; the only difference is Jackson 2.21.8 versus 2.21.7.
 
-### 1.2.1 (pending, 2026-10-24)
+### 1.2.1 (2026-10-24)
 
 `pom.xml` is now `1.2.1`; a local `mvn -B clean package` produces a **60777-byte** main jar on JDK 8
 (**61190 bytes** for the same source on JDK 21) with 30 entries and 17 classes, and 242 tests run with 0 failures
@@ -1371,7 +1380,7 @@ so a rebuild changes it — the Central record is authoritative after publishing
 A local `-P release deploy -DskipPublishing=true` run produced
 `target/central-publishing/central-bundle.zip` (**236990 bytes, 24 files**, sha256
 `fdcd57e91f009d3c3438c95a75dce74ccda23baa327e1f52eac30ae3ab422612`); all four `.asc` files pass
-`gpg --verify` (the signature is made by subkey `21AAF067632A8E6A`). **Nothing has been uploaded yet.**
+`gpg --verify` (the signature is made by subkey `21AAF067632A8E6A`). It was uploaded and published on 2026-10-24.
 
 The only change is dependencies: Jackson 2.13.5 → 2.21.8, closing CVE-2026-83557 / 68497 / 19032 / 89425 /
 89407 / 91776 and fixing CVE-2026-110879 / GHSA-m8xf-2cr7-77ph (published 2026-10-20, an incomplete fix for
@@ -1381,8 +1390,14 @@ Jackson 2.x is still Java 8 bytecode (`major version: 52`). The test dependency 
 `spring-boot-starter-test` to `junit-jupiter`, keeping Spring 5.3.x / logback 1.2.x and similar off the test
 classpath. The public API, result shape and parsing behaviour are unchanged.
 
-Upload and verification record: pending release; the Portal Deployment ID, Central byte counts and sha256
-will be added here after publishing.
+Upload and verification record (2026-10-24): Portal Deployment `11cdf8ca-0884-4626-9356-c82a6455144e`,
+status **PUBLISHED**; `repo1.maven.org` serves a **60777-byte** `document-parser-1.2.1.jar`, a **12136-byte**
+`.pom`, an **81550-byte** sources.jar and an **89001-byte** javadoc.jar, matching the local release bundle.
+All four `.sha256` files were checked one by one: jar
+`ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3`, sources
+`1d2fbc27afe3974036c4c6233b24577b94d7b4d014403af4caebb0b31e68420c`, javadoc
+`94ac6f87c12143e2d122009373db6afab727a5d5ea4a36c193e49440f6f94e8c`, pom
+`e6fda84c361fbfafc596490bc26134e25584a41f7c0cf39eec07e3c19dc78e53`.
 
 ### 1.2.0 (2026-10-23)
 

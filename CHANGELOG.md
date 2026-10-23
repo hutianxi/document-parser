@@ -8,7 +8,7 @@
 
 ---
 
-## 1.2.1 — 2026-10-24（未发布）
+## 1.2.1 — 2026-10-24
 
 ### 构建 / 依赖
 
@@ -24,7 +24,11 @@
   json-smart 2.4.11 / json-path 2.7.0、assertj 3.22.0、xmlunit 2.9.1、asm 9.3 带进测试类路径。
   对外 API、返回结构与解析行为不变。
 
-1.2.0 已在 Central 发布，但其 POM 仍指向 Jackson 2.21.7；要拿到 2.21.8 需要用 1.2.1。
+本版已发布到 Maven Central（2026-10-24，Portal Deployment `11cdf8ca-0884-4626-9356-c82a6455144e`，状态 PUBLISHED）。
+Central 上的 `document-parser-1.2.1.jar` 为 **60777 字节**、`.pom` 为 **12136 字节**，与本地发布包逐字节一致；
+四个 `.sha256` 也逐个核对过，主 jar 是
+`ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3`（其余三份见 README §17）。
+1.2.0 的 POM 仍指向 Jackson 2.21.7；要拿到 2.21.8 需要用 1.2.1。
 
 ## 1.2.0 — 2026-10-23
 

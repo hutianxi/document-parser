@@ -73,8 +73,8 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
       三种格式返回同一套结构，换格式只换类名；表格统一还原成「表头 + 行对象」，<code>headers</code> 可以直接当列清单用。
     </p>
     <div class="badges">
-      <span class="badge">Maven Central <b>cn.net.tianxi:document-parser:1.2.0</b></span>
-      <span class="badge"><b>1.2.1</b> 待发布</span>
+      <span class="badge">Maven Central <b>cn.net.tianxi:document-parser:1.2.1</b></span>
+      <span class="badge"><b>1.2.1</b> 2026-10-24 发布</span>
       <span class="badge">Java <b>8+</b></span>
       <span class="badge">License <b>Apache 2.0</b></span>
       <span class="badge">Tests <b>241 passed / 1 skipped</b></span>
@@ -103,7 +103,7 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
       <div><div class="n">1 套</div><div class="l">返回结构覆盖三种格式</div></div>
       <div><div class="n">3 个</div><div class="l">入口类，方法签名一一对应</div></div>
       <div><div class="n">0 处</div><div class="l">12 次解析里 headers 与行键的不一致</div></div>
-      <div><div class="n">17 个</div><div class="l">class，1.2.1 本机 jar 60777 字节</div></div>
+      <div><div class="n">17 个</div><div class="l">class，1.2.1 发布 jar 60777 字节</div></div>
     </div>
     <div class="grid g3" style="margin-top:24px">
       <div class="card">
@@ -142,8 +142,8 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
     &lt;artifactId&gt;document-parser&lt;/artifactId&gt;
     &lt;version&gt;1.2.1&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
-    <p class="sub">Central 上当前可拉取的是 <code>1.2.0</code>（Jackson 2.21.7）；<code>1.2.1</code> 待发布，只把 Jackson 升到
-      <code>2.21.8</code> 修 CVE-2026-110879，API 与解析行为不变。</p>
+    <p class="sub">Central 上的 <code>1.2.1</code> 已于 2026-10-24 发布，相对 <code>1.2.0</code> 只把 Jackson 升到
+      <code>2.21.8</code> 修 CVE-2026-110879，API 与解析行为不变；镜像站若还没同步，可暂时用 <code>1.2.0</code>（Jackson 2.21.7）。</p>
 <pre><code>Map&lt;String, Object&gt; result = WordParser.parse("D:/a.docx", "销售");   // PdfParser / PptParser 同名同参
 String json = WordParser.toJson(result);</code></pre>
     <p class="sub" style="margin-top:18px">要入库的那几张表可以在注册表头时起个名字，之后按名字取组取行，不必去数 <code>tables</code> 下标（只有命中了注册表头的组才带 <code>name</code> 键）。注意：<code>name</code> / <code>tablesByName</code> / <code>rowsByName</code> 与 <code>source</code> 键是 <strong>1.2.0 新增</strong>的，1.1.1 产物里没有它们。</p>
@@ -376,10 +376,10 @@ Copyright 2026 hutianxi，Apache License 2.0，
         <h3>构件</h3>
         <ul class="tight">
           <li><a href="https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/">Maven Central 目录</a></li>
-          <li><b>1.2.1 待发布</b>：改动只有 Jackson 2.21.7 → <b>2.21.8</b>（CVE-2026-110879 / GHSA-m8xf-2cr7-77ph，CVE-2026-54512 的不完整修复），API、返回结构与解析行为不变；本机 JDK 8 主 jar 60777 字节，发布后在这里补 Portal Deployment 与 sha256</li>
+          <li><b>1.2.1 已发布</b>（2026-10-24）：Portal Deployment <code>11cdf8ca…55144e</code> 状态 PUBLISHED；改动只有 Jackson 2.21.7 → <b>2.21.8</b>（CVE-2026-110879 / GHSA-m8xf-2cr7-77ph，CVE-2026-54512 的不完整修复），API、返回结构与解析行为不变；Central 上的主 jar 60777 字节、pom 12136 字节，四份 <code>.sha256</code> 与本机发布包逐个一致（jar <code>ce9af926…c0ca3</code>）</li>
           <li>1.2.0 已发布：Portal Deployment <code>923fda1a…6a5def</code> 状态 PUBLISHED，jar 60236 字节、sha256 <code>92db3a72…52a4b4</code>，与 Central、GitHub Release 附件逐字节一致</li>
           <li>此前发布的 1.1.1 jar sha256 <code>c2c47ba9…5233148</code>（与 Central、当时的本地产物、GitHub Release 附件三处一致）</li>
-          <li>本页的基线数字取自 <b>1.2.1</b>（待发布）；Central 上仍是 1.2.0（Jackson 2.21.7），两者 API 相同。PDF 无边框补读、<code>source</code> 键、<code>name</code> 键与 <code>unmatchedHeaders</code> 都是 1.2.0 新增，1.1.1 里没有它们（见 CHANGELOG 的 1.2.0 一节）</li>
+          <li>本页的基线数字取自 <b>1.2.1</b>，Central 上可拉取的就是这一版；1.2.0 与 1.2.1 的 API 相同，差别只是 Jackson 2.21.8 与 2.21.7。PDF 无边框补读、<code>source</code> 键、<code>name</code> 键与 <code>unmatchedHeaders</code> 都是 1.2.0 新增，1.1.1 里没有它们（见 CHANGELOG 的 1.2.0 一节）</li>
           <li>底层技术文档 <a href="https://docs.aspose.com">docs.aspose.com</a></li>
         </ul>
       </div>
