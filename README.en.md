@@ -1328,7 +1328,7 @@ After Publish, syncing to `repo1.maven.org` takes tens of minutes to a few hours
 slower). Verification URL:
 
 ```
-https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/
+https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.0/
 ```
 
 1.1.1 went through the whole flow and was **verified by measurement**: Portal Deployment
@@ -1353,10 +1353,32 @@ repository was deleted afterwards.
 (**60650 bytes** for the same source on JDK 21) with 30 entries and 17 classes, and all 242 tests pass.
 The sources and javadoc jars are produced by the `release` profile at package time.
 
-**Upload and verification record pending**: the Portal Deployment ID, the byte counts and sha256 of the
-three artifacts, and the result of `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.2.0
--Dtransitive=false` against a brand-new empty local repository will be recorded here once the upload
-succeeds and `repo1.maven.org` has caught up.
+**Upload and verification record (measured 2026-10-24)**: Portal Deployment
+`923fda1a-a25c-46f3-b83d-a387966a5def` is **PUBLISHED**, and every artifact on `repo1.maven.org` is
+byte-for-byte identical to the local build:
+
+| Artifact | Bytes | sha256 |
+| --- | --- | --- |
+| `document-parser-1.2.0.jar` | 60236 | `92db3a721654ea142aff88f6735cca5a557576febde5251b80b784aabf25a4b4` |
+| `document-parser-1.2.0-sources.jar` | 81011 | `f564cd6626cb9df39d191d3bdb53f0dc6acee6932871f5dc51749690f9c39139` |
+| `document-parser-1.2.0-javadoc.jar` | 88998 | `aea880dfe09ca25af534571c4f01b8521d00aeb5190c966896f807c6c831aaca` |
+| `document-parser-1.2.0.pom` | 11118 | `fd7b4a0c976ff730c822e9d4d16e83d73c41e2ab1db2cd8403d7e0f1dfd5a2c5` |
+
+The `central-bundle.zip` used for the upload is 235380 bytes and 24 files (245751 bytes uncompressed),
+local sha256 `402f1d7e39f7790c0f6796548d1f6beba4cdcede6e5c6123a364dd97152fac82`; it is only the upload
+container and is not served by Central on its own.
+
+A **brand-new empty local repository** was then used for `mvn dependency:get
+-Dartifact=cn.net.tianxi:document-parser:1.2.0 -Dtransitive=false` (`-Dmaven.repo.local` pointed at a
+temporary directory): **BUILD SUCCESS**, with the jar fetched from
+`https://repo.maven.apache.org/maven2/cn/net/tianxi/document-parser/1.2.0/document-parser-1.2.0.jar`,
+60236 bytes and the same sha256 as the first row above. Run from this repository's directory, Maven first
+looks for the artifact in the Aspose repository declared in the pom (it is not there) and then fetches it
+from Central. The temporary repository was deleted afterwards.
+
+The GitHub Release [`v1.2.0`](https://github.com/hutianxi/document-parser/releases/tag/v1.2.0) is published
+as well (tag pointing at commit `bfbdec9`, marked Latest); the `size` and `digest` of its three attachments,
+as returned by the GitHub API, match the table above item by item.
 
 **One thing consumers must know**: the three Aspose artifacts are not on Maven Central, so anyone
 depending on `document-parser` must declare `https://repository.aspose.com/repo/` in their own pom as
@@ -1365,8 +1387,10 @@ shown in section 5.1, otherwise dependency resolution fails.
 After 1.1.1 was published to Central, a GitHub Release `v1.1.1` was created with the jar, sources.jar and
 javadoc.jar attached, so people not using Maven can download them directly:
 [v1.1.1](https://github.com/hutianxi/document-parser/releases/tag/v1.1.1) is published and all three
-attachments are in Assets (the sha256 shown by GitHub matches the local artifacts). The 1.2.0 release will
-carry the same three artifacts once the Central upload succeeds.
+attachments are in Assets (the sha256 shown by GitHub matches the local artifacts). The 1.2.0 release has
+also been created: [v1.2.0](https://github.com/hutianxi/document-parser/releases/tag/v1.2.0) (published
+2026-10-24 00:18 +0800, Latest) carries the same three artifacts, and their `size` / `digest` match the
+table above.
 
 ## 18. Appendix: fix log (historical numbers)
 

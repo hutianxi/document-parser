@@ -1060,7 +1060,7 @@ mvn -B -P release deploy -DskipPublishing=true      # 版本号不能带 -SNAPSH
 Publish 之后同步到 `repo1.maven.org` 需要几十分钟到几小时（搜索索引更慢），验证地址：
 
 ```
-https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/
+https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.0/
 ```
 
 1.1.1 已经走完全流程并**实测验证过**：Portal Deployment `960f618b-cb17-4cb1-9d40-96849df2a219` 状态 PUBLISHED，
@@ -1080,16 +1080,35 @@ sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148`，与 
 （JDK 21 打同一份源码是 **60650 字节**）、30 个条目、17 个 class，242 个测试全过。
 sources.jar 与 javadoc.jar 由 `release` profile 在打包时生成。
 
-**上传与验证记录待补**：Portal Deployment ID、三个产物的字节数与 sha256，以及用一个全新空本地仓库跑
-`mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.2.0 -Dtransitive=false` 的结果，
-会在上传成功并同步到 `repo1.maven.org` 之后填在这里。
+**上传与验证记录（2026-10-24 实测）**：Portal Deployment `923fda1a-a25c-46f3-b83d-a387966a5def` 状态
+**PUBLISHED**；`repo1.maven.org` 上的产物与本机构建逐字节一致：
+
+| 产物 | 字节数 | sha256 |
+| --- | --- | --- |
+| `document-parser-1.2.0.jar` | 60236 | `92db3a721654ea142aff88f6735cca5a557576febde5251b80b784aabf25a4b4` |
+| `document-parser-1.2.0-sources.jar` | 81011 | `f564cd6626cb9df39d191d3bdb53f0dc6acee6932871f5dc51749690f9c39139` |
+| `document-parser-1.2.0-javadoc.jar` | 88998 | `aea880dfe09ca25af534571c4f01b8521d00aeb5190c966896f807c6c831aaca` |
+| `document-parser-1.2.0.pom` | 11118 | `fd7b4a0c976ff730c822e9d4d16e83d73c41e2ab1db2cd8403d7e0f1dfd5a2c5` |
+
+上传用的 `central-bundle.zip` 是 235380 字节、24 个文件（解压后 245751 字节），本机 sha256
+`402f1d7e39f7790c0f6796548d1f6beba4cdcede6e5c6123a364dd97152fac82`；它只是上传容器，Central 上不单独提供。
+
+再用一个**全新的空本地仓库**跑 `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.2.0
+-Dtransitive=false`（`-Dmaven.repo.local` 指到临时目录），结果 **BUILD SUCCESS**，jar 从
+`https://repo.maven.apache.org/maven2/cn/net/tianxi/document-parser/1.2.0/document-parser-1.2.0.jar` 取回，
+60236 字节、sha256 与上表第一行相同。在本仓库目录下跑时，Maven 会先按 pom 里声明的 Aspose 仓库找一遍这个构件
+（那里没有），随后从 Central 取到。临时仓库用完已删。
+
+GitHub Release [`v1.2.0`](https://github.com/hutianxi/document-parser/releases/tag/v1.2.0) 也已发布（tag 指向
+提交 `bfbdec9`，标记为 Latest），三个附件经 GitHub API 查到的 `size` 与 `digest` 和上表逐项相同。
 
 **使用方要知道的一件事**：Aspose 的三个构件不在 Maven Central 上，所以别人引 `document-parser` 时，
 必须像 5.1 节写的那样在自己的 pom 里声明 `https://repository.aspose.com/repo/`，否则依赖解析会失败。
 
 1.1.1 发布后已在 GitHub 上建过 Release `v1.1.1`，jar、sources.jar、javadoc.jar 三个附件都在 Assets 里
 （GitHub 侧显示的 sha256 与本地产物一致）：[v1.1.1](https://github.com/hutianxi/document-parser/releases/tag/v1.1.1)。
-1.2.0 的 Release 待 Central 发布成功后同样附上三个产物与 `v1.2.0` tag。
+1.2.0 的 Release 也已建好：[v1.2.0](https://github.com/hutianxi/document-parser/releases/tag/v1.2.0)（2026-10-24
+00:18 +0800 发布，Latest），三个附件的 `size` 与 `digest` 同上表。
 
 ## 18. 附录：修复记录（历史数字）
 

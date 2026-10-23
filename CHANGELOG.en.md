@@ -435,9 +435,13 @@ jar **60,236 bytes / 30 entries / 17 classes**, `major version: 52`; the same co
 `javac -Xlint:all -Xpkginfo:always` reports **0 warnings** and `javadoc -Xdoclint:all,-missing`
 **0 errors**.
 
-Release preparation ends here: the version is bumped and both JDKs have run the full build. **The commit,
-the `v1.2.0` tag and the Maven Central upload are still to be done**; the publication record will be added
-to README §17 once the upload succeeds.
+**Release result**: commit `bfbdec9` and tag `v1.2.0` are pushed to GitHub and Gitee; Maven Central Portal
+Deployment `923fda1a-a25c-46f3-b83d-a387966a5def` reached **PUBLISHED**, and the four artifacts on
+`repo1.maven.org` — jar / sources / javadoc / pom — are **60,236 / 81,011 / 88,998 / 11,118** bytes with
+sha256 values byte-for-byte identical to the local build. A brand-new empty local repository ran
+`dependency:get` with **BUILD SUCCESS**, fetching a 60,236-byte jar with the same sha256. GitHub Release
+`v1.2.0` was published on 2026-10-24 00:18 (+0800), and the `size` / `digest` of its three attachments match
+Central. Full record in README §17.
 
 ---
 

@@ -319,8 +319,11 @@
 jar **60650 字节**，条目与 class 数同上；`javac -Xlint:all -Xpkginfo:always` **0** 告警、
 `javadoc -Xdoclint:all,-missing` **0** 错误。
 
-发版准备到此完成：版本号已升、两套 JDK 都跑过完整构建；**提交、打 `v1.2.0` tag 与上传 Maven Central
-仍未执行**，发布记录待上传成功后补进 README §17。
+**发布结果**：提交 `bfbdec9`、tag `v1.2.0` 已推送 GitHub 与 Gitee；Maven Central Portal Deployment
+`923fda1a-a25c-46f3-b83d-a387966a5def` 状态 **PUBLISHED**，`repo1.maven.org` 上 jar / sources / javadoc / pom
+四个产物分别是 **60236 / 81011 / 88998 / 11118** 字节，sha256 与本机构建逐字节一致；全新空本地仓库
+`dependency:get` **BUILD SUCCESS**，取回的 jar 60236 字节、sha256 同上。GitHub Release `v1.2.0` 已于
+2026-10-24 00:18（+0800）发布，三个附件的 `size` / `digest` 与 Central 相同。完整记录见 README §17。
 
 ---
 
