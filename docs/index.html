@@ -74,9 +74,10 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
     </p>
     <div class="badges">
       <span class="badge">Maven Central <b>cn.net.tianxi:document-parser:1.2.0</b></span>
+      <span class="badge"><b>1.2.1</b> 待发布</span>
       <span class="badge">Java <b>8+</b></span>
       <span class="badge">License <b>Apache 2.0</b></span>
-      <span class="badge">Tests <b>242 passed / 1 skipped</b></span>
+      <span class="badge">Tests <b>241 passed / 1 skipped</b></span>
     </div>
     <div class="actions">
       <a class="btn primary" href="https://github.com/hutianxi/document-parser">GitHub 主仓库</a>
@@ -102,7 +103,7 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
       <div><div class="n">1 套</div><div class="l">返回结构覆盖三种格式</div></div>
       <div><div class="n">3 个</div><div class="l">入口类，方法签名一一对应</div></div>
       <div><div class="n">0 处</div><div class="l">12 次解析里 headers 与行键的不一致</div></div>
-      <div><div class="n">17 个</div><div class="l">class，本机 jar 60236 字节</div></div>
+      <div><div class="n">17 个</div><div class="l">class，1.2.1 本机 jar 60777 字节</div></div>
     </div>
     <div class="grid g3" style="margin-top:24px">
       <div class="card">
@@ -139,8 +140,10 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:.88rem}
 &lt;dependency&gt;
     &lt;groupId&gt;cn.net.tianxi&lt;/groupId&gt;
     &lt;artifactId&gt;document-parser&lt;/artifactId&gt;
-    &lt;version&gt;1.2.0&lt;/version&gt;
+    &lt;version&gt;1.2.1&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
+    <p class="sub">Central 上当前可拉取的是 <code>1.2.0</code>（Jackson 2.21.7）；<code>1.2.1</code> 待发布，只把 Jackson 升到
+      <code>2.21.8</code> 修 CVE-2026-110879，API 与解析行为不变。</p>
 <pre><code>Map&lt;String, Object&gt; result = WordParser.parse("D:/a.docx", "销售");   // PdfParser / PptParser 同名同参
 String json = WordParser.toJson(result);</code></pre>
     <p class="sub" style="margin-top:18px">要入库的那几张表可以在注册表头时起个名字，之后按名字取组取行，不必去数 <code>tables</code> 下标（只有命中了注册表头的组才带 <code>name</code> 键）。注意：<code>name</code> / <code>tablesByName</code> / <code>rowsByName</code> 与 <code>source</code> 键是 <strong>1.2.0 新增</strong>的，1.1.1 产物里没有它们。</p>
@@ -203,7 +206,7 @@ mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/你的文档.docx"
       <tbody>
         <tr><td>输入前提</td><td>电子原生文档：Word 存的 docx、程序导出的 pdf、PowerPoint 存的 pptx</td><td>任何能变成图片的页面，<b>包括扫描件、拍照件</b></td></tr>
         <tr><td>文字从哪来</td><td>文件内的字符数据，原样读出</td><td>从像素推断，存在误识率</td></tr>
-        <tr><td>数字与金额</td><td>与原文逐字符一致（<code>合计</code> 行读到的是域缓存值 <code>2096.30</code>/<code>1796.10</code>，242 个测试逐格断言）</td><td><code>0/O</code>、<code>1/l</code>、<code>8/B</code>、小数点这类字形易混，金额通常要人工复核</td></tr>
+        <tr><td>数字与金额</td><td>与原文逐字符一致（<code>合计</code> 行读到的是域缓存值 <code>2096.30</code>/<code>1796.10</code>，测试逐格断言）</td><td><code>0/O</code>、<code>1/l</code>、<code>8/B</code>、小数点这类字形易混，金额通常要人工复核</td></tr>
         <tr><td>表格结构</td><td>拿到<b>真结构</b>：合并单元格标记、两行表头、单元格内嵌套子表都能识别并拆开回填</td><td>靠框线检测还原；无边框表、跨页断表、合并格容易错行错列</td></tr>
         <tr><td>结果稳定性</td><td>同一份文件重复解析结果<b>完全相同</b>，可以写成断言进 CI</td><td>换引擎版本、换分辨率、换二值化参数结果会变，难做回归</td></tr>
         <tr><td>部署形态</td><td>一个 jar + 三个 Aspose 依赖，进程内完成，不联网</td><td>一般要额外装识别引擎/模型，或把文档上传到第三方云服务</td></tr>
@@ -280,7 +283,7 @@ mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/你的文档.docx"
 <section>
   <div class="wrap">
     <h2>实测基线</h2>
-    <p class="sub">环境：Maven 3.8.8、Windows 11、没有任何 <code>.lic</code>（三个解析器都跑在评估模式）；JDK <code>1.8.0_191</code> 与 <code>21.0.1</code> 各跑一遍完整测试，两边都是 242 个测试全过、1 条跳过。下面每个数字都是当前测试里的断言值，<code>mvn -B clean test</code> 就能复现。</p>
+    <p class="sub">环境：Maven 3.8.8、Windows 11、没有任何 <code>.lic</code>（三个解析器都跑在评估模式）；JDK <code>1.8.0_191</code> 与 <code>21.0.1</code> 各跑一遍完整测试，两边都是 242 条测试、0 失败、1 条跳过。下面每个数字都是当前测试里的断言值，<code>mvn -B clean test</code> 就能复现。</p>
     <div class="scroll">
     <table>
       <thead><tr><th>样例</th><th><code>text</code></th><th>表头组</th><th>数据行</th><th>图片</th><th>META 结果长度</th><th>BASE64 结果长度</th></tr></thead>
@@ -315,8 +318,8 @@ mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/你的文档.docx"
     </table>
     </div>
     <ul class="tight" style="margin-top:12px">
-      <li>本轮构建核对：<code>javac -Xlint:all -Xpkginfo:always</code> <b>0</b> 告警（17 个 class，含 <code>package-info.class</code>），<code>javadoc -Xdoclint:all,-missing</code> <b>0</b> 错误，<code>mvn -B clean package</code> BUILD SUCCESS、242 个测试 0 失败 0 错误（1 条 <code>-Ddoc</code> 入口跳过），主 jar <b>60236 字节 / 30 个条目 / 17 个 class</b>、<code>major version: 52</code>。jar 字节数别当校验和用：只动 javadoc 注释也会让字节码里的行号表跟着挪，换 JDK 打包数字也变 —— 同一份源码本轮 JDK 8 打出 60236、JDK 21 打出 60650，条目数、class 数与字节码版本三处都一致。</li>
-      <li>整轮耗时（1.2.0 发版构建）：<code>mvn -B clean package</code>（编译 + 测试 + 打包）JDK 8 <b>02:10</b>、JDK 21 <b>02:17</b>；<code>mvn -B test</code> 不加 <code>-DargLine</code> 也是 242/242，那一行只影响中文编码。早先文档写过「比 1.1.1 那轮慢约 80 秒、单类 31.5 秒 → 76.5 秒」，那是拿被别的进程抢占的一轮与空闲的一轮并列比出来的，已撤回：把 <code>documentedJsonLengthsAreTheRealOnes</code> 开／关交替各跑三轮，整类耗时是 34.6／30.9／37.6 秒对 29.8／35.9／38.2 秒，差值被轮次噪声吃掉。能精确归因的只有 surefire 报告里的单条 <b>3.9 秒（本轮 JDK 21）</b>（早前 JDK 8 几轮在 2.7 ～ 3.8 秒之间）；所有耗时只看数量级，别当性能回归的判据。</li>
+      <li>本轮构建核对（1.2.1）：<code>javac -Xlint:all -Xpkginfo:always</code> <b>0</b> 告警（17 个 class，含 <code>package-info.class</code>），<code>javadoc -Xdoclint:all,-missing</code> <b>0</b> 错误，<code>mvn -B clean package</code> BUILD SUCCESS、242 个测试 0 失败 0 错误（1 条 <code>-Ddoc</code> 入口跳过），主 jar <b>60777 字节 / 30 个条目 / 17 个 class</b>、<code>major version: 52</code>。jar 字节数别当校验和用：只动 javadoc 注释也会让字节码里的行号表跟着挪，换 JDK 打包数字也变 —— 同一份源码本轮 JDK 8 打出 60777、JDK 21 打出 61190，条目数、class 数与字节码版本三处都一致。</li>
+      <li>整轮耗时（1.2.1 轮）：<code>mvn -B clean package</code>（编译 + 测试 + 打包）JDK 8 <b>01:48</b>、JDK 21 <b>02:11</b>；<code>mvn -B test</code> 不加 <code>-DargLine</code> 也是 242 条、0 失败、1 跳过，那一行只影响中文编码。早先文档写过「比 1.1.1 那轮慢约 80 秒、单类 31.5 秒 → 76.5 秒」，那是拿被别的进程抢占的一轮与空闲的一轮并列比出来的，已撤回：把 <code>documentedJsonLengthsAreTheRealOnes</code> 开／关交替各跑三轮，整类耗时是 34.6／30.9／37.6 秒对 29.8／35.9／38.2 秒，差值被轮次噪声吃掉。能精确归因的只有 surefire 报告里的单条 <b>3.9 秒（1.2.0 那轮 JDK 21）</b>（早前 JDK 8 几轮在 2.7 ～ 3.8 秒之间）；所有耗时只看数量级，别当性能回归的判据。</li>
     </ul>
   </div>
 </section>
@@ -373,9 +376,10 @@ Copyright 2026 hutianxi，Apache License 2.0，
         <h3>构件</h3>
         <ul class="tight">
           <li><a href="https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/">Maven Central 目录</a></li>
+          <li><b>1.2.1 待发布</b>：改动只有 Jackson 2.21.7 → <b>2.21.8</b>（CVE-2026-110879 / GHSA-m8xf-2cr7-77ph，CVE-2026-54512 的不完整修复），API、返回结构与解析行为不变；本机 JDK 8 主 jar 60777 字节，发布后在这里补 Portal Deployment 与 sha256</li>
           <li>1.2.0 已发布：Portal Deployment <code>923fda1a…6a5def</code> 状态 PUBLISHED，jar 60236 字节、sha256 <code>92db3a72…52a4b4</code>，与 Central、GitHub Release 附件逐字节一致</li>
           <li>此前发布的 1.1.1 jar sha256 <code>c2c47ba9…5233148</code>（与 Central、当时的本地产物、GitHub Release 附件三处一致）</li>
-          <li>本页写的是 <b>1.2.0</b> 的数字：PDF 无边框补读、<code>source</code> 键、<code>name</code> 键与 <code>unmatchedHeaders</code> 都是 1.2.0 新增，1.1.1 里没有它们（见 CHANGELOG 的 1.2.0 一节）</li>
+          <li>本页的基线数字取自 <b>1.2.1</b>（待发布）；Central 上仍是 1.2.0（Jackson 2.21.7），两者 API 相同。PDF 无边框补读、<code>source</code> 键、<code>name</code> 键与 <code>unmatchedHeaders</code> 都是 1.2.0 新增，1.1.1 里没有它们（见 CHANGELOG 的 1.2.0 一节）</li>
           <li>底层技术文档 <a href="https://docs.aspose.com">docs.aspose.com</a></li>
         </ul>
       </div>

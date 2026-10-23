@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/JDK-8%2B-orange.svg)](#3-tech-stack-and-requirements)
 [![Maven Central](https://img.shields.io/badge/Maven%20Central-1.2.0-green.svg)](#17-build-and-publishing)
-[![Tests](https://img.shields.io/badge/tests-242%20passed-brightgreen.svg)](#13-testing-and-quality)
+[![Tests](https://img.shields.io/badge/tests-241%20passed-brightgreen.svg)](#13-testing-and-quality)
 
 [中文](README.md) ｜ **English**
 
@@ -13,12 +13,12 @@
 
 | Project | Value |
 | --- | --- |
-| Maven coordinates | `cn.net.tianxi:document-parser:1.2.0` |
+| Maven coordinates | `cn.net.tianxi:document-parser:1.2.0` (currently on Central; `1.2.1` is pending — dependency upgrade only) |
 | Java package | `cn.net.tianxi.document` |
 | Language level | Java 8 (Aspose artifacts use the `jdk16` classifier) |
 | Underlying technology | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12; API and behaviour follow [docs.aspose.com](https://docs.aspose.com) |
-| Artifact | Plain library jar — the local `mvn -B clean package` produces 60236 bytes, 30 entries, 17 classes, including `META-INF/LICENSE` and `META-INF/NOTICE`. The 1.1.1 on Maven Central is the previous 56275-byte artifact; the 1.2.0 release record is in [CHANGELOG.en.md](CHANGELOG.en.md) and §17. No Spring container, no CLI entry point |
-| Tests | JUnit 5, 242 tests pass (15 test classes; 1 of them is a `-Ddoc` entry point and is skipped by default) |
+| Artifact | Plain library jar — the released 1.2.0 artifact is 60236 bytes. The pending 1.2.1 build is **60777 bytes, 30 entries and 17 classes** on JDK 8 and 61190 bytes for the same source on JDK 21 (`mvn -B clean package`), including `META-INF/LICENSE` and `META-INF/NOTICE`. The 1.1.1 on Maven Central is the earlier 56275-byte artifact; the 1.2.0 release record is in [CHANGELOG.en.md](CHANGELOG.en.md) and §17. No Spring container, no CLI entry point |
+| Tests | JUnit 5, 242 tests across 15 test classes: 241 pass, 1 `-Ddoc` entry point is skipped by default |
 | Changelog | [CHANGELOG.en.md](CHANGELOG.en.md) (中文: [CHANGELOG.md](CHANGELOG.md)) — what changed in each version, with the measured numbers |
 | License | [Apache License 2.0](LICENSE): free to use, modify, use commercially and redistribute, **provided the original author attribution is kept** (see [NOTICE](NOTICE)). Pull requests welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)) |
 | Repositories | GitHub [`hutianxi/document-parser`](https://github.com/hutianxi/document-parser) (primary) ｜ Gitee [`mailtianxi/document-parser`](https://gitee.com/mailtianxi/document-parser) (China mirror) |
@@ -94,7 +94,7 @@ These are two entirely different technical routes, so let's state the difference
 | --- | --- | --- |
 | Input precondition | Electronically native documents: docx saved by Word, pdf exported by a program, pptx saved by PowerPoint | Any page that can be turned into an image, **including scans and photos** |
 | Where the text comes from | The character data inside the file, read verbatim | Inferred from pixels, so there is a misrecognition rate |
-| Numbers and money amounts | Character-for-character identical to the original: the `合计` (total) row reads the cached field values `2096.30` / `1796.10`, asserted cell by cell across 242 tests (§11) | `0/O`, `1/l`, `8/B` and decimal points are easily confused glyph pairs; amounts usually need human review |
+| Numbers and money amounts | Character-for-character identical to the original: the `合计` (total) row reads the cached field values `2096.30` / `1796.10`, asserted cell by cell by the suite (§11) | `0/O`, `1/l`, `8/B` and decimal points are easily confused glyph pairs; amounts usually need human review |
 | Table structure | The **real** structure: merge flags (`gridSpan`/`vMerge`/`rowSpan`), two-row headers, tables nested inside a cell are all detected, split and back-filled | Reconstructed from rule detection; borderless tables, tables split across pages and merged cells easily lose rows or columns |
 | Reading order | Document-tree order (paragraph → table → shape), matching the author's writing order | Inferred from layout coordinates; multi-column pages and floating text boxes easily cross over |
 | Result stability | Repeated parsing of the same file yields **exactly the same result**, so it can be asserted in CI | Results change with engine version, resolution and binarisation parameters, which makes regression testing hard |
@@ -241,20 +241,23 @@ Scenarios that do not fit and need a different approach (each has a matching not
 | `com.aspose:aspose-words:jdk16` | 23.12 | doc/docx parsing |
 | `com.aspose:aspose-pdf:jdk16` | 23.12 | pdf parsing (`TableAbsorber` / `ParagraphAbsorber` / `ImagePlacementAbsorber`) |
 | `com.aspose:aspose-slides:jdk16` | 23.12 | ppt/pptx parsing |
-| `com.fasterxml.jackson.core:jackson-databind` | 2.13.5 | `toJson` serialisation |
-| `spring-boot-starter-test` (test scope) | managed by parent pom 2.7.18, JUnit 5.8.2 | unit tests |
+| `com.fasterxml.jackson.core:jackson-databind` | 2.21.8 (from 1.2.1) | `toJson` serialisation |
+| `org.junit.jupiter:junit-jupiter` (test scope) | managed by parent pom 2.7.18, JUnit 5.8.2 | unit tests |
 
 Requirements:
 
 - JDK 8 or newer (the Aspose artifacts use the `jdk16` classifier and work fine on Java 8): the full test
-  suite was run under both JDK `1.8.0_191` and JDK `21.0.1`, and **all 242 tests pass with 1 skipped** on
-  both, and the class files produced by both are `major version: 52` (Java 8 bytecode) — because
+  suite was run under both JDK `1.8.0_191` and JDK `21.0.1`, and both **ran 242 tests with 0 failures and
+  1 skipped**, and the class files produced by both are `major version: 52` (Java 8 bytecode) — because
   `java.version=1.8` makes maven-compiler-plugin use `-source/-target 1.8`, compiling with a newer JDK
   does **not** raise the bytecode version;
 - Maven 3.8.8 (the version measured here), with access to `https://repository.aspose.com/repo/`;
 - On headless servers add `-Djava.awt.headless=true` (Aspose uses AWT image classes internally);
 - The parent pom is `spring-boot-starter-parent` **only to borrow its dependency version management**;
   this module has no Spring bootstrap class and does not configure `spring-boot-maven-plugin`.
+  Tests only pull `junit-jupiter` and deliberately **do not use `spring-boot-starter-test`**, keeping
+  components such as Spring 5.3.x and logback 1.2.x — which have no security-fix releases on those lines —
+  off the test classpath.
 
 ## 4. Project layout
 
@@ -302,12 +305,15 @@ the public surface is the three parser classes only.
 
 ## 5. Quick start
 
-> This README describes **1.2.0**. Compared with 1.1.1, 1.2.0 adds the `source` key, the `name` key and the
-> `tablesByName` / `rowsByName` entry points, the top-level `unmatchedHeaders` switch, and borderless-table
-> recovery in PDF. The three main keys `text` / `tables` / `images`, the `headers`-vs-row-keys contract and
-> the four image modes are unchanged from 1.1.1; the difference is that each group there has no
-> `source` / `name` key and that borderless PDF tables are not recovered in 1.1.1. None of the new content
-> exists while you stay on 1.1.1. See the 1.2.0 section of [CHANGELOG.en.md](CHANGELOG.en.md) and §17.
+> This README describes **1.2.1** (pending release). Compared with 1.2.0, 1.2.1 only raises Jackson to 2.21.8,
+> fixing CVE-2026-110879 (an incomplete fix for CVE-2026-54512: generic arguments and array element types could
+> still bypass the PolymorphicTypeValidator); the API, result shape and parsing behaviour are unchanged.
+> Compared with 1.1.1, 1.2.0 adds the `source` key, the `name` key and the `tablesByName` / `rowsByName` entry
+> points, the top-level `unmatchedHeaders` switch, and borderless-table recovery in PDF. The three main keys
+> `text` / `tables` / `images`, the `headers`-vs-row-keys contract and the four image modes are unchanged from
+> 1.1.1; the difference is that each group there has no `source` / `name` key and that borderless PDF tables are
+> not recovered in 1.1.1. None of the new content exists while you stay on 1.1.1. See the 1.2.1 and 1.2.0
+> sections of [CHANGELOG.en.md](CHANGELOG.en.md) and §17.
 
 ### 5.1 Add the dependency
 
@@ -315,9 +321,12 @@ the public surface is the three parser classes only.
 <dependency>
     <groupId>cn.net.tianxi</groupId>
     <artifactId>document-parser</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
 </dependency>
 ```
+
+> Until 1.2.1 is published, the newest version available on Central is 1.2.0; if you need it right now,
+> use `1.2.0` instead — the only difference is that it still ships Jackson 2.21.7.
 
 The three Aspose artifacts come from `https://repository.aspose.com/repo/`, so consumers must declare
 that repository in their own `pom.xml` (this project already declares it).
@@ -677,15 +686,17 @@ Each of the four tables stresses one structure (same source in all three formats
 ## 11. Measured baselines
 
 Environment: Maven 3.8.8, Windows 11, **no `.lic` at all**, so all three parsers run in evaluation mode;
-the full suite was run under JDK `1.8.0_191` and JDK `21.0.1`, and both gave 242 tests passing with
+the full suite was run under JDK `1.8.0_191` and JDK `21.0.1`, and both ran 242 tests with 0 failures and
 1 skipped. Every number below is an assertion value in the current tests and can be reproduced with
-`mvn -B clean test` (whole-round duration of the 1.2.0 release build: `clean package` — compile, test and
-jar — took **02:10** on JDK 8 and **02:17** on JDK 21; it is 242/242 with or without
-`-DargLine="-Dfile.encoding=UTF-8"`, which only affects the Chinese encoding in the console and the reports.
-The jar size depends on the JDK: **60236** bytes on JDK 8, **60650** on JDK 21).
+`mvn -B clean test` (whole-round duration of the 1.2.1 dependency-upgrade round: `clean package` — compile, test
+and jar — took **01:48** on JDK 8 and **02:11** on JDK 21; the 1.2.0 release round measured 02:10 / 02:17. It is
+242 tests with 0 failures and 1 skipped, with or without `-DargLine="-Dfile.encoding=UTF-8"`, which only affects the Chinese encoding in the
+console and the reports. The jar size depends on the JDK: **60777** bytes on JDK 8, **61190** on JDK 21;
+the 1.2.0 release round produced 60236 / 60650).
 
-**Do not treat the whole-round duration as a performance figure.** The 1.2.0 release build measured 02:10 and
-02:17, while an idle round of the same code measured 01:25 and 01:32; even earlier the same command reached
+**Do not treat the whole-round duration as a performance figure.** The 1.2.1 dependency-upgrade round measured
+01:48 and 02:11, the 1.2.0 release round 02:10 and 02:17, while an idle round of the same code measured 01:25 and
+01:32; even earlier the same command reached
 **02:15–02:37** when another process was competing for CPU — nearly double. The only cost that can be attributed precisely is the per-method
 timing in the surefire report: `CrossFormatTest.documentedJsonLengthsAreTheRealOnes`, which turns the
 **12 JSON lengths** in this section (silent, registered-without-names, registered-with-names, BASE64 — four
@@ -877,19 +888,20 @@ the samples repeatedly), `TableByNameTest` **7.3 s**, `PdfCrossPageTableTest` **
 PDF inside the test), `PdfMergedCellTableTest` **0.34 s** and `WordEdgeCasesTest` **0.32 s**.
 The same classes in the JDK 21 round measured `CrossFormatTest` 38.3 (`documentedJsonLengthsAreTheRealOnes`
 3.5 s), `PdfParserTest` 18.5, `PrintResultTest` 22.7, `TableByNameTest` 5.7 and `PdfCrossPageTableTest` 4.8 s.
-A whole `mvn -B clean package` round (compile + test + jar) took **02:10** on JDK 8 and **02:17** on JDK 21
-in the 1.2.0 release build. The range is dominated by machine load (the same command measured 02:15–02:37 earlier while
+A whole `mvn -B clean package` round (compile + test + jar) took **01:48** on JDK 8 and **02:11** on JDK 21
+in the 1.2.1 dependency-upgrade round (the 1.2.0 release round measured 02:10 / 02:17). The range is dominated
+by machine load (the same command measured 02:15–02:37 earlier while
 another process was competing for CPU; an earlier round measured 01:32–01:42 on JDK 8 and 01:55 on JDK 21,
 with `CrossFormatTest` about 10 s apart), so **read these durations as an order of
 magnitude, not as a performance-regression signal** — see §11.
 
-This round's build checks (JDK 8): `javac -Xlint:all -Xpkginfo:always` with **0** warnings (17 classes,
+This round's build checks (JDK 8, 1.2.1): `javac -Xlint:all -Xpkginfo:always` with **0** warnings (17 classes,
 including `package-info.class`), `javadoc -Xdoclint:all,-missing` with **0** errors,
 `mvn -B clean package` BUILD SUCCESS with **242 tests**, 0 failures and 0 errors
-(1 `-Ddoc` entry skipped; 242/242 with or without `-DargLine="-Dfile.encoding=UTF-8"`), main jar
-**60236 bytes / 30 entries / 17 classes** and `major version: 52`. Do not treat the jar size as a checksum:
+(1 `-Ddoc` entry skipped; 242 tests with 0 failures and 1 skipped, with or without `-DargLine="-Dfile.encoding=UTF-8"`), main jar
+**60777 bytes / 30 entries / 17 classes** and `major version: 52`. Do not treat the jar size as a checksum:
 comment lines shift the line-number tables in the bytecode, and packaging with a different JDK changes the
-number too — the same source gave **60236** bytes on JDK 8 and **60650** on JDK 21 in this round, while the
+number too — the same source gave **60777** bytes on JDK 8 and **61190** on JDK 21 in this round, while the
 entry count, the class count and the bytecode version (`major version: 52`) matched in all three places.
 
 ### See the parse result directly (printed to the console)
@@ -1215,16 +1227,15 @@ version bumped. Pure internal refactoring and comment-only changes are not recor
 ## 17. Build and publishing
 
 ```
-mvn -B clean test          # JAVA_HOME pointing at JDK 8; this round measured 242 tests passing (1 -Ddoc entry skipped)
-mvn -B clean package       # artifact target/document-parser-1.2.0.jar (measured this round: 60236 bytes, 30 entries, 17 classes;
+mvn -B clean test          # JAVA_HOME pointing at JDK 8; this round measured 242 tests (241 pass, 1 -Ddoc entry skipped)
+mvn -B clean package       # artifact target/document-parser-1.2.1.jar (measured this round: 60777 bytes, 30 entries, 17 classes;
                            # classes live directly under cn/net/tianxi/document/ at the jar root;
                            # the prepare-package phase copies the root LICENSE and NOTICE into META-INF/,
                            # so consumers who only get the jar still see the attribution and third-party license notes)
 ```
 
-The javadoc doclint check runs the JDK's own `javadoc` directly (the local offline repository has no
-`maven-javadoc-plugin`, and `mvn javadoc:javadoc` measurably fails with
-`No plugin found for prefix 'javadoc'`):
+The javadoc doclint check can also run the JDK's own `javadoc` directly (without Maven, for a quick check);
+the `maven-javadoc-plugin` 3.4.1 in the `release` profile also produced the javadoc jar successfully this round:
 
 ```
 mvn -B dependency:build-classpath -Dmdep.outputFile=target/cp.txt
@@ -1270,7 +1281,7 @@ The private key on this machine has **no passphrase** (so the build can run full
 one: `gpg --edit-key 41AF7E29CB53074D` → `passwd`, then put the passphrase in settings.xml under
 `<server><id>gpg</id><passphrase>`.
 
-There are two publishing routes; 1.1.1 and 1.2.0 both use the first (**it does not require putting the token on disk**):
+There are two publishing routes; 1.1.1, 1.2.0 and the planned 1.2.1 all use the first (**it does not require putting the token on disk**):
 
 **A. Build the bundle locally + upload through the Portal web UI**
 
@@ -1278,16 +1289,16 @@ There are two publishing routes; 1.1.1 and 1.2.0 both use the first (**it does n
 mvn -B -P release deploy -DskipPublishing=true      # the version must not contain -SNAPSHOT
 ```
 
-This produces `target/central-publishing/central-bundle.zip` (measured 266857 bytes, 24 entries):
-under `cn/net/tianxi/document-parser/1.1.1/`, the `document-parser-1.1.1.jar` (56275 bytes),
-`-sources.jar` (64964 bytes), `-javadoc.jar` (141571 bytes) and `.pom`, each with an `.asc` signature and
-`md5/sha1/sha256/sha512` checksums.
+This produces `target/central-publishing/central-bundle.zip` (266857 bytes for 1.1.1, 236990 bytes for 1.2.1;
+24 entries in both cases). The 1.1.1 zip held, under `cn/net/tianxi/document-parser/1.1.1/`, the
+`document-parser-1.1.1.jar` (56275 bytes), `-sources.jar` (64964 bytes), `-javadoc.jar` (141571 bytes) and
+`.pom`, each with an `.asc` signature and `md5/sha1/sha256/sha512` checksums.
 
 Then go to Portal → **Publishing → Publish Component**: fill in the Deployment Name (e.g.
-`document-parser 1.2.0 (cn.net.tianxi)`) and a description, choose this zip, and click Publish Component.
-After submitting, a **VALIDATING** record appears in the Deployments list (this one's Deployment ID was
-`960f618b-cb17-4cb1-9d40-96849df2a219`); once validation passes, a **Publish** button appears on the same
-row, and clicking it is what actually makes it public.
+`document-parser 1.2.1 (cn.net.tianxi)`) and a description, choose this zip, and click Publish Component.
+After submitting, a **VALIDATING** record appears in the Deployments list (the 1.1.1 one was
+`960f618b-cb17-4cb1-9d40-96849df2a219`; 1.2.1 has not been uploaded, so it has no ID yet); once validation
+passes, a **Publish** button appears on the same row, and clicking it is what actually makes it public.
 
 Two pitfalls (both hit in practice):
 
@@ -1328,7 +1339,7 @@ After Publish, syncing to `repo1.maven.org` takes tens of minutes to a few hours
 slower). Verification URL:
 
 ```
-https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.0/
+https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.1/
 ```
 
 1.1.1 went through the whole flow and was **verified by measurement**: Portal Deployment
@@ -1343,14 +1354,40 @@ sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148` — id
 places: Central's `.sha256`, the local artifact and the GitHub Release attachment. The temporary
 repository was deleted afterwards.
 
-> **Version / artifact consistency**: this README and the changelog now describe **1.2.0**. The 1.1.1 on
-> Maven Central (main jar 56275 bytes) does **not** contain the `source` / `name` / `unmatchedHeaders` keys or
-> borderless-table recovery; 1.2.0 exists precisely to close that gap.
+> **Version / artifact consistency**: this README and the changelog now describe **1.2.1** (pending release).
+> The 1.2.0 on Maven Central (main jar 60236 bytes) does contain the `source` / `name` / `unmatchedHeaders`
+> keys and borderless-table recovery, but still ships Jackson 2.21.7; 1.2.1 only fixes the dependency and
+> keeps the 1.2.0 API exactly.
+
+### 1.2.1 (pending, 2026-10-24)
+
+`pom.xml` is now `1.2.1`; a local `mvn -B clean package` produces a **60777-byte** main jar on JDK 8
+(**61190 bytes** for the same source on JDK 21) with 30 entries and 17 classes, and 242 tests run with 0 failures
+(1 skipped). The sources and javadoc jars are produced by the `release` profile; the bundle built on
+2026-10-24 02:32 holds JDK 8 sources and javadoc jars of **81550** and **89001** bytes (the javadoc footer
+carries a generation timestamp, so that jar varies by a few bytes between runs). The main-jar sha256 is
+`ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3` (jar entries carry build timestamps,
+so a rebuild changes it — the Central record is authoritative after publishing).
+A local `-P release deploy -DskipPublishing=true` run produced
+`target/central-publishing/central-bundle.zip` (**236990 bytes, 24 files**, sha256
+`fdcd57e91f009d3c3438c95a75dce74ccda23baa327e1f52eac30ae3ab422612`); all four `.asc` files pass
+`gpg --verify` (the signature is made by subkey `21AAF067632A8E6A`). **Nothing has been uploaded yet.**
+
+The only change is dependencies: Jackson 2.13.5 → 2.21.8, closing CVE-2026-83557 / 68497 / 19032 / 89425 /
+89407 / 91776 and fixing CVE-2026-110879 / GHSA-m8xf-2cr7-77ph (published 2026-10-20, an incomplete fix for
+CVE-2026-54512). `DatabindContext` in 2.21.8 adds array-element-type validation, and
+`ApprovedBaseTypeValidator` only exists in this release; 2.21.7 and earlier do not contain that code.
+Jackson 2.x is still Java 8 bytecode (`major version: 52`). The test dependency moved from
+`spring-boot-starter-test` to `junit-jupiter`, keeping Spring 5.3.x / logback 1.2.x and similar off the test
+classpath. The public API, result shape and parsing behaviour are unchanged.
+
+Upload and verification record: pending release; the Portal Deployment ID, Central byte counts and sha256
+will be added here after publishing.
 
 ### 1.2.0 (2026-10-23)
 
 `pom.xml` is now `1.2.0`; a local `mvn -B clean package` produces a **60236-byte** main jar on JDK 8
-(**60650 bytes** for the same source on JDK 21) with 30 entries and 17 classes, and all 242 tests pass.
+(**60650 bytes** for the same source on JDK 21) with 30 entries and 17 classes, and 242 tests run with 0 failures (1 skipped).
 The sources and javadoc jars are produced by the `release` profile at package time.
 
 **Upload and verification record (measured 2026-10-24)**: Portal Deployment

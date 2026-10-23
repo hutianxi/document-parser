@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/JDK-8%2B-orange.svg)](#3-技术栈与环境要求)
 [![Maven Central](https://img.shields.io/badge/Maven%20Central-1.2.0-green.svg)](#17-构建)
-[![Tests](https://img.shields.io/badge/tests-242%20passed-brightgreen.svg)](#13-测试与质量)
+[![Tests](https://img.shields.io/badge/tests-241%20passed-brightgreen.svg)](#13-测试与质量)
 
 [中文](README.md) ｜ **English** → [README.en.md](README.en.md)
 
@@ -12,12 +12,12 @@
 
 | 项目信息 | 值 |
 | --- | --- |
-| Maven 坐标 | `cn.net.tianxi:document-parser:1.2.0` |
+| Maven 坐标 | `cn.net.tianxi:document-parser:1.2.0`（Central 当前版本；`1.2.1` 待发布，只升级 Jackson 依赖） |
 | Java 包 | `cn.net.tianxi.document` |
 | 语言级别 | Java 8（Aspose 用 `jdk16` classifier 的构件） |
 | 底层技术 | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12，API 与行为以 [docs.aspose.com](https://docs.aspose.com) 为准 |
-| 产物 | 普通库 jar（本机 `mvn -B clean package` 打出 60236 字节、30 个条目、17 个 class，含 `META-INF/LICENSE` 与 `META-INF/NOTICE`；Maven Central 上的 1.1.1 是上一版的 56275 字节产物，1.2.0 的发布记录见 [CHANGELOG.md](CHANGELOG.md) 与 §17），无 Spring 容器、无命令行入口 |
-| 测试 | JUnit 5，242 个测试全过（15 个测试类，其中 1 条是 `-Ddoc` 入口，平时跳过） |
+| 产物 | 普通库 jar（1.2.0 发版产物 60236 字节；1.2.1 待发版产物在 JDK 8 下 `mvn -B clean package` 为 **60777 字节、30 个条目、17 个 class**，JDK 21 打同一份源码为 61190 字节，含 `META-INF/LICENSE` 与 `META-INF/NOTICE`；Maven Central 上的 1.1.1 是更早的 56275 字节产物；1.2.0 的发布记录见 [CHANGELOG.md](CHANGELOG.md) 与 §17），无 Spring 容器、无命令行入口 |
+| 测试 | JUnit 5，242 条测试、15 个测试类：241 条通过，1 条是 `-Ddoc` 入口、平时跳过 |
 | 更新日志 | [CHANGELOG.md](CHANGELOG.md)（英文 [CHANGELOG.en.md](CHANGELOG.en.md)）—— 每个版本对外可见的变化与实测数字 |
 | 开源许可 | [Apache License 2.0](LICENSE)：可免费使用、修改、商用、再分发，**须保留原作者署名**（见 [NOTICE](NOTICE)），欢迎提 PR（见 [CONTRIBUTING.md](CONTRIBUTING.md)） |
 | 代码仓库 | GitHub [`hutianxi/document-parser`](https://github.com/hutianxi/document-parser)｜Gitee [`mailtianxi/document-parser`](https://gitee.com/mailtianxi/document-parser) |
@@ -81,7 +81,7 @@ Word 有真正的表格对象和合并标记，PDF 只有画出来的线段和�
 | --- | --- | --- |
 | 输入前提 | 电子原生文档：Word 存的 docx、程序导出的 pdf、PowerPoint 存的 pptx | 任何能变成图片的页面，**包括扫描件、拍照件** |
 | 文字从哪来 | 文件内的字符数据，原样读出 | 从像素推断，存在误识率 |
-| 数字与金额 | 与原文逐字符一致：`合计` 行读到的就是域缓存值 `2096.30`/`1796.10`，242 个测试逐格断言（§11） | `0/O`、`1/l`、`8/B`、小数点这类字形易混，金额通常要人工复核 |
+| 数字与金额 | 与原文逐字符一致：`合计` 行读到的就是域缓存值 `2096.30`/`1796.10`，这些值由测试逐格断言（§11） | `0/O`、`1/l`、`8/B`、小数点这类字形易混，金额通常要人工复核 |
 | 表格结构 | 拿到**真结构**：合并单元格标记（`gridSpan`/`vMerge`/`rowSpan`）、两行表头、单元格内嵌套子表都能识别并拆开回填 | 靠框线检测还原；无边框表、跨页断表、合并格容易错行错列 |
 | 阅读顺序 | 按文档树顺序（段落 → 表格 → 形状），与作者的写作顺序一致 | 按版面坐标推断，多栏、浮动文本框容易串行 |
 | 结果稳定性 | 同一份文件重复解析结果**完全相同**，可以写成断言进 CI | 换引擎版本、换分辨率、换二值化参数结果会变，难做回归 |
@@ -176,17 +176,19 @@ Word 有真正的表格对象和合并标记，PDF 只有画出来的线段和�
 | `com.aspose:aspose-words:jdk16` | 23.12 | doc/docx 解析 |
 | `com.aspose:aspose-pdf:jdk16` | 23.12 | pdf 解析（`TableAbsorber` / `ParagraphAbsorber` / `ImagePlacementAbsorber`） |
 | `com.aspose:aspose-slides:jdk16` | 23.12 | ppt/pptx 解析 |
-| `com.fasterxml.jackson.core:jackson-databind` | 2.13.5 | `toJson` 序列化 |
-| `spring-boot-starter-test`（test 作用域） | 由父 pom 2.7.18 管理，JUnit 5.8.2 | 单元测试 |
+| `com.fasterxml.jackson.core:jackson-databind` | 2.21.8（1.2.1 起） | `toJson` 序列化 |
+| `org.junit.jupiter:junit-jupiter`（test 作用域） | 由父 pom 2.7.18 管理，JUnit 5.8.2 | 单元测试 |
 
 环境要求：
 
 - JDK 8 及以上（Aspose 构件是 `jdk16` classifier，Java 8 可直接用）：本机在 JDK `1.8.0_191` 与 JDK `21.0.1` 下
-  各跑一遍完整测试都是 **242 个测试全过、1 条跳过**，两边产出的 class 文件都是 `major version: 52`（Java 8 字节码）——
+  各跑一遍完整测试都是 **242 条、0 失败 0 错误、1 条跳过**，两边产出的 class 文件都是 `major version: 52`（Java 8 字节码）——
   `java.version=1.8` 会让 maven-compiler-plugin 走 `-source/-target 1.8`，所以用高版本 JDK 编译**不会**抬高字节码版本；
 - Maven 3.8.8（本机实测版本），需要能访问 `https://repository.aspose.com/repo/`；
 - 无头服务器加 `-Djava.awt.headless=true`（Aspose 内部会用到 AWT 的图像类）；
-- 父 pom 用 `spring-boot-starter-parent` **只为借它的依赖版本管理**，本模块没有 Spring 启动类，也没配 `spring-boot-maven-plugin`。
+- 父 pom 用 `spring-boot-starter-parent` **只为借它的依赖版本管理**，本模块没有 Spring 启动类，也没配 `spring-boot-maven-plugin`；
+  测试只引 `junit-jupiter`、**不引 `spring-boot-starter-test`**，避免把 Spring 5.3.x、logback 1.2.x 等在该版本线上
+  已没有安全修复版本的组件带进测试类路径。
 
 ## 4. 目录结构
 
@@ -233,11 +235,13 @@ document-parser/
 
 ## 5. 快速开始
 
-> 本 README 描述的是 **1.2.0**。相对 1.1.1，1.2.0 新增了 `source` 键、`name` 键与 `tablesByName` / `rowsByName`
+> 本 README 描述的是 **1.2.1**（待发布）。相对 1.2.0，1.2.1 只把 Jackson 升到 2.21.8，修复
+> CVE-2026-110879（CVE-2026-54512 的不完整修复：泛型参数与数组元素类型仍可绕过 PolymorphicTypeValidator），
+> API、返回结构与解析行为不变。相对 1.1.1，1.2.0 新增了 `source` 键、`name` 键与 `tablesByName` / `rowsByName`
 > 入口、顶层 `unmatchedHeaders` 开关，并补读了 PDF 无边框表；三个主键 `text` / `tables` / `images` 的名字、
 > `headers` 与行键的契约、四种图片模式在 1.1.1 里都一样，差别只是每组没有 `source`／`name` 这两个键，
 > 以及 PDF 里无边框的表在 1.1.1 里读不出来。仍在使用 1.1.1 时，这些新内容都不可用；
-> 完整变化见 [CHANGELOG.md](CHANGELOG.md) 的 1.2.0 一节与 §17。
+> 完整变化见 [CHANGELOG.md](CHANGELOG.md) 的 1.2.1 与 1.2.0 两节、§17。
 
 ### 5.1 引入依赖
 
@@ -245,9 +249,12 @@ document-parser/
 <dependency>
     <groupId>cn.net.tianxi</groupId>
     <artifactId>document-parser</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
 </dependency>
 ```
+
+> 1.2.1 发布前，Central 上可用的最新版是 1.2.0；只想立即使用的话把版本号换成 `1.2.0` 即可，
+> 代价是 Jackson 仍是 2.21.7。
 
 Aspose 的三个构件来自 `https://repository.aspose.com/repo/`，引用方需要在自己的 `pom.xml` 里声明这个仓库
 （本工程已经声明）。
@@ -518,16 +525,17 @@ pptx 样例里所有文字都压在 5 个字符以内，正是因为评估模式
 ## 11. 实测基线
 
 环境：Maven 3.8.8、Windows 11、**没有任何 `.lic`**，三个解析器都跑在评估模式；
-JDK 用 `1.8.0_191` 与 `21.0.1` 各跑了一遍完整测试，两边都是 242 个测试全过、1 条跳过。
-下面的数字全部是当前测试里的断言值，`mvn -B clean test` 就能复现。整轮耗时（1.2.0 发版构建：JDK 8 `clean package`
-编译 + 测试 + 打包 **02:10**；JDK 21 同一条命令 **02:17**；加不加 `-DargLine` 那一行都是 242/242，
-它只影响控制台与报告里的中文编码。产物字节数 JDK 8 **60236**、JDK 21 **60650**）。
+JDK 用 `1.8.0_191` 与 `21.0.1` 各跑了一遍完整测试，两边都是 242 条、0 失败 0 错误、1 条跳过。
+下面的数字全部是当前测试里的断言值，`mvn -B clean test` 就能复现。整轮耗时（1.2.1 依赖升级轮：
+JDK 8 `clean package` 编译 + 测试 + 打包 **01:48**；JDK 21 同一条命令 **02:11**；加不加 `-DargLine`
+那一行都是 242 条、0 失败、1 条跳过，它只影响控制台与报告里的中文编码。产物字节数 JDK 8 **60777**、JDK 21 **61190**。
+作为对照，1.2.0 发版轮是 02:10 / 02:17、60236 / 60650 字节）。
 
-**整轮耗时别当性能指标用**：同一台机器、同一份主代码，1.2.0 发版构建是 02:10（JDK 8）、
-02:17（JDK 21），上一轮空闲时是 01:25 与 01:32；早先机器被别的进程抢占时，同一条命令测到过
+**整轮耗时别当性能指标用**：1.2.1 依赖升级轮是 01:48（JDK 8）、02:11（JDK 21），1.2.0 发版轮是
+02:10 与 02:17，上一轮空闲时是 01:25 与 01:32；早先机器被别的进程抢占时，同一条命令测到过
 **02:15 ～ 02:37**，差出近一倍。能精确归因的只有 surefire 报告里的
 每方法计时 —— `CrossFormatTest.documentedJsonLengthsAreTheRealOnes`（把下面这 **12 个 JSON 长度**逐个写成断言，
-为此多解析 12 次）单条实测 **3.9 秒（本轮 JDK 21）**，早前 JDK 8 几轮在 **2.7 ～ 3.8 秒**之间
+为此多解析 12 次）单条实测 **3.9 秒（1.2.0 那轮 JDK 21；1.2.1 那轮是 3.5 秒）**，早前 JDK 8 几轮在 **2.7 ～ 3.8 秒**之间
 （`target/surefire-reports/TEST-*.xml`）。
 早先文档写过「这条断言让整轮慢了 80 秒、单类 31.5 秒 → 76.5 秒」，那是拿一轮被抢占的耗时去比另一轮空闲耗时得出的，
 **复现不出来**：把这条断言开／关交替各跑三轮，整类耗时差值完全被轮次噪声吃掉。那句已按实测撤回，好处不变：
@@ -694,16 +702,17 @@ pptx 靠「所有文字 ≤5 个字符」把 Slides 的截断绕开，docx 的 1
 `PdfMergedCellTableTest` **0.34 秒**、`WordEdgeCasesTest` **0.32 秒**。
 JDK 21 同一轮里这几个数分别是 `CrossFormatTest` 38.3（`documentedJsonLengthsAreTheRealOnes` 3.5 秒）、
 `PdfParserTest` 18.5、`PrintResultTest` 22.7、`TableByNameTest` 5.7、`PdfCrossPageTableTest` 4.8 秒。
-整轮 `mvn -B clean package`（编译 + 测试 + 打包）1.2.0 发版构建 JDK 8 **02:10**、JDK 21 **02:17**。
+整轮 `mvn -B clean package`（编译 + 测试 + 打包）1.2.1 依赖升级轮 JDK 8 **01:48**、JDK 21 **02:11**
+（1.2.0 发版轮为 02:10 / 02:17）。
 区间受机器负载影响很大（早先有别的进程抢 CPU 时，同一条命令测到 02:15 ～ 02:37；
 之前同一条命令还测到过 JDK 8 01:32 ～ 01:42、JDK 21 01:55，`CrossFormatTest` 两轮差约 10 秒），
 所以**耗时只看数量级、别当性能回归的判据**，详见 §11。
 
-本轮构建核对（JDK 8）：`javac -Xlint:all -Xpkginfo:always` **0** 告警（17 个 class，含 `package-info.class`），
+本轮构建核对（JDK 8，1.2.1）：`javac -Xlint:all -Xpkginfo:always` **0** 告警（17 个 class，含 `package-info.class`），
 `javadoc -Xdoclint:all,-missing` **0** 错误，`mvn -B clean package` BUILD SUCCESS、**242 个测试 0 失败 0 错误**
-（1 条 `-Ddoc` 入口跳过），主 jar **60236 字节 / 30 个条目 / 17 个 class**、`major version: 52`。
+（1 条 `-Ddoc` 入口跳过），主 jar **60777 字节 / 30 个条目 / 17 个 class**、`major version: 52`。
 jar 字节数别当校验和用：只动 javadoc 注释也会让字节码里的行号表跟着挪，换 JDK 打包数字也变 ——
-同一份源码本轮 JDK 8 打出 60236、JDK 21 打出 60650，条目数、class 数与字节码版本（`major version: 52`）三处都一致。
+同一份源码本轮 JDK 8 打出 60777、JDK 21 打出 61190，条目数、class 数与字节码版本（`major version: 52`）三处都一致。
 
 ### 直接看解析结果（打印到控制台）
 
@@ -967,15 +976,15 @@ OOXML（docx/pptx）是压缩包，解压后全量进内存，压缩比极高的
 ## 17. 构建
 
 ```
-mvn -B clean test          # JAVA_HOME 指向 JDK 8；本轮实测 242 个测试全过（1 条 -Ddoc 入口跳过）
-mvn -B clean package       # 产物 target/document-parser-1.2.0.jar（本轮实测 60236 字节、30 个条目、17 个 class，
+mvn -B clean test          # JAVA_HOME 指向 JDK 8；本轮实测 242 条测试（241 通过、1 条 -Ddoc 入口跳过）
+mvn -B clean package       # 产物 target/document-parser-1.2.1.jar（本轮实测 60777 字节、30 个条目、17 个 class，
                            # 类直接放在 jar 根目录的 cn/net/tianxi/document/ 下；
                            # prepare-package 阶段会把根目录的 LICENSE 与 NOTICE 复制进 META-INF/，
                            # 所以只拿到 jar 的使用方也看得到署名与第三方授权说明）
 ```
 
-javadoc 的 doclint 核对用 JDK 自带的 `javadoc` 直接跑（本机离线仓库里没有 `maven-javadoc-plugin`，
-`mvn javadoc:javadoc` 实测报 `No plugin found for prefix 'javadoc'`）：
+javadoc 的 doclint 核对可以用 JDK 自带的 `javadoc` 直接跑（不经过 Maven，便于快速复核）；
+`release` profile 里的 `maven-javadoc-plugin` 3.4.1 在本轮也已成功产出 javadoc jar：
 
 ```
 mvn -B dependency:build-classpath -Dmdep.outputFile=target/cp.txt
@@ -1011,7 +1020,7 @@ Central 校验签名时会去公钥服务器查这把公钥，查不到就打回
 本机这把私钥**没有口令**（为了让构建能全自动跑）；要加口令：`gpg --edit-key 41AF7E29CB53074D` → `passwd`，
 之后构建时把口令配在 settings.xml 的 `<server><id>gpg</id><passphrase>` 里。
 
-发布有两条路，1.1.1 与 1.2.0 都走第一条（**不需要把 Token 落到磁盘上**）：
+发布有两条路，1.1.1、1.2.0 与计划中的 1.2.1 都走第一条（**不需要把 Token 落到磁盘上**）：
 
 **A. 本地打 bundle + Portal 网页上传**
 
@@ -1019,14 +1028,15 @@ Central 校验签名时会去公钥服务器查这把公钥，查不到就打回
 mvn -B -P release deploy -DskipPublishing=true      # 版本号不能带 -SNAPSHOT
 ```
 
-产出 `target/central-publishing/central-bundle.zip`（实测 266857 字节、24 个条目）：
-`cn/net/tianxi/document-parser/1.1.1/` 下的 `document-parser-1.1.1.jar`（56275 字节）、`-sources.jar`（64964 字节）、
-`-javadoc.jar`（141571 字节）、`.pom`，各带一个 `.asc` 签名和 `md5/sha1/sha256/sha512` 四个校验和。
+产出 `target/central-publishing/central-bundle.zip`（1.1.1 那次实测 266857 字节、1.2.1 这次 236990 字节，都是 24 个条目）：
+1.1.1 的 zip 里是 `cn/net/tianxi/document-parser/1.1.1/` 下的 `document-parser-1.1.1.jar`（56275 字节）、
+`-sources.jar`（64964 字节）、`-javadoc.jar`（141571 字节）、`.pom`，各带一个 `.asc` 签名和
+`md5/sha1/sha256/sha512` 四个校验和。
 
-然后到 Portal → **Publishing → Publish Component**：填 Deployment Name（如 `document-parser 1.2.0 (cn.net.tianxi)`）
+然后到 Portal → **Publishing → Publish Component**：填 Deployment Name（如 `document-parser 1.2.1 (cn.net.tianxi)`）
 与描述，Choose File 选这个 zip，点 Publish Component。提交后 Deployments 列表里出现一条 **VALIDATING** 记录
-（本次的 Deployment ID 是 `960f618b-cb17-4cb1-9d40-96849df2a219`），校验通过后同一行会出现 **Publish** 按钮，
-点它才真正公开。
+（1.1.1 那次是 `960f618b-cb17-4cb1-9d40-96849df2a219`；1.2.1 尚未上传，还没有 ID），校验通过后同一行会出现
+**Publish** 按钮，点它才真正公开。
 
 两个坑（都实测踩过）：
 
@@ -1060,7 +1070,7 @@ mvn -B -P release deploy -DskipPublishing=true      # 版本号不能带 -SNAPSH
 Publish 之后同步到 `repo1.maven.org` 需要几十分钟到几小时（搜索索引更慢），验证地址：
 
 ```
-https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.0/
+https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.1/
 ```
 
 1.1.1 已经走完全流程并**实测验证过**：Portal Deployment `960f618b-cb17-4cb1-9d40-96849df2a219` 状态 PUBLISHED，
@@ -1071,13 +1081,35 @@ https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.2.0/
 sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148`，与 Central 上的 `.sha256`、
 本地产物、GitHub Release 附件三处完全相同。临时仓库用完已删。
 
-> **版本号与产物的一致性**：README 与 CHANGELOG 现在描述的是 **1.2.0**。Central 上的 1.1.1（主 jar
-> 56275 字节）不含 `source`、`name`、`unmatchedHeaders` 这些键与无边框表补读；1.2.0 正是为补齐这些差异而发布。
+> **版本号与产物的一致性**：README 与 CHANGELOG 现在描述的是 **1.2.1**（待发布）。Central 上的
+> 1.2.0（主 jar 60236 字节）包含 `source`、`name`、`unmatchedHeaders` 这些键与无边框表补读，
+> 但 Jackson 仍是 2.21.7；1.2.1 只修依赖，API 与 1.2.0 完全相同。
+
+### 1.2.1（待发布，2026-10-24）
+
+`pom.xml` 已升到 `1.2.1`；本机 JDK 8 `mvn -B clean package` 打出主 jar **60777 字节**
+（JDK 21 打同一份源码是 **61190 字节**）、30 个条目、17 个 class，242 条测试、1 条跳过（241 通过）。
+`sources.jar` 与 `javadoc.jar` 由 `release` profile 生成；2026-10-24 02:32 打出的 bundle 里，
+JDK 8 产物是 **81550** 与 **89001** 字节（javadoc 页脚带生成时间，这个 jar 每轮会差几个字节）。
+主 jar sha256 `ce9af926820b55b18505d2efa51a02cbd92dbe73376fda7a46d3fec6298c0ca3`
+（jar 条目带构建时间戳，重打即变，发布时以 Central 上的记录为准）。
+本地已用 `-P release deploy -DskipPublishing=true` 打出 `target/central-publishing/central-bundle.zip`
+（**236990 字节、24 个文件**，sha256 `fdcd57e91f009d3c3438c95a75dce74ccda23baa327e1f52eac30ae3ab422612`），
+四个 `.asc` 均 `gpg --verify` 通过（实际签名落在子密钥 `21AAF067632A8E6A` 上）；**尚未上传**。
+
+改动只有依赖：Jackson 2.13.5 → 2.21.8，补齐 CVE-2026-83557 / 68497 / 19032 / 89425 / 89407 / 91776，
+并修复 CVE-2026-110879 / GHSA-m8xf-2cr7-77ph（2026-10-20 发布，CVE-2026-54512 的不完整修复）。
+2.21.8 的 `DatabindContext` 里新增了数组元素类型校验，`ApprovedBaseTypeValidator` 也只在这个版本出现；
+2.21.7 及更早版本没有这些代码。Jackson 2.x 仍是 Java 8 字节码（`major version: 52`）。
+测试依赖从 `spring-boot-starter-test` 换成 `junit-jupiter`，不再把 Spring 5.3.x / logback 1.2.x 等带进测试类路径。
+对外 API、返回结构与解析行为不变。
+
+上传与验证记录：待发布；发布后在这里补 Portal Deployment ID、Central 上的字节数与 sha256。
 
 ### 1.2.0（2026-10-23）
 
 `pom.xml` 已升到 `1.2.0`；本机 `mvn -B clean package` 在 JDK 8 上打出主 jar **60236 字节**
-（JDK 21 打同一份源码是 **60650 字节**）、30 个条目、17 个 class，242 个测试全过。
+（JDK 21 打同一份源码是 **60650 字节**）、30 个条目、17 个 class，242 条测试、1 条跳过（241 通过）。
 sources.jar 与 javadoc.jar 由 `release` profile 在打包时生成。
 
 **上传与验证记录（2026-10-24 实测）**：Portal Deployment `923fda1a-a25c-46f3-b83d-a387966a5def` 状态

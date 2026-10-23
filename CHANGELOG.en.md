@@ -11,6 +11,26 @@ holds unreleased changes, they are listed in a separate section at the top.
 
 ---
 
+## 1.2.1 — 2026-10-24 (unreleased)
+
+### Build / dependencies
+
+- Jackson 2.13.5 → 2.21.8, closing CVE-2026-83557 / 68497 / 19032 / 89425 / 89407 / 91776 and fixing
+  CVE-2026-110879 / GHSA-m8xf-2cr7-77ph (published 2026-10-20; an incomplete fix for CVE-2026-54512 where
+  generic arguments and array element types could still bypass the PolymorphicTypeValidator). `DatabindContext`
+  in 2.21.8 adds array-element-type validation, and `ApprovedBaseTypeValidator` only exists in that release;
+  2.21.7 and earlier do not contain that code. Jackson 2.x is still Java 8 bytecode (`ObjectMapper.class`
+  major version 52). `mvn -B clean package` runs **242 tests with 0 failures and 1 skipped** under both JDK 8 and JDK 21;
+  the JDK 8 main jar is **60777 bytes, 30 entries, 17 classes**, and the same source gives **61190 bytes** on
+  JDK 21 with the same entry and class counts.
+- The test dependency changed from `spring-boot-starter-test` to `org.junit.jupiter:junit-jupiter` (5.8.2,
+  still managed by the parent pom), so spring-boot 2.7.18, Spring Framework 5.3.31, logback 1.2.12,
+  snakeyaml 1.30, log4j-api 2.17.2, json-smart 2.4.11 / json-path 2.7.0, assertj 3.22.0, xmlunit 2.9.1
+  and asm 9.3 no longer enter the test classpath. Public API, result structure and parsing behaviour are
+  unchanged.
+
+1.2.0 is published on Central, but its POM still points at Jackson 2.21.7; use 1.2.1 to get 2.21.8.
+
 ## 1.2.0 — 2026-10-23
 
 `pom.xml` is now `1.2.0` and `mvn -B clean package` produces `document-parser-1.2.0.jar`.
@@ -315,7 +335,7 @@ Errors found in the documentation in the same round (all corrected, not carried 
   **242 cases, 0 failures, 0 errors,
   1 skipped**; main jar **60236 bytes / 30 entries / 17 classes**, `major version: 52`;
   `javac -Xlint:all -Xpkginfo:always` **0** warnings (17 classes including `package-info.class`);
-  `javadoc -Xdoclint:all,-missing` **0** errors. `mvn -B test` without `-DargLine` is 242/242 as well; that
+  `javadoc -Xdoclint:all,-missing` **0** errors. `mvn -B test` without `-DargLine` runs 242 tests with 0 failures and 1 skipped as well; that
   flag only affects the console and report encoding.
   The same `clean package` on JDK 21: **02:17**, jar
   **60650 bytes**, same entry and class counts, still `major version: 52` — packaging the same source with
@@ -431,7 +451,7 @@ of them show as `!!` in `git status --ignored`.
 
 **Final gates**: under version `1.2.0`, JDK 8 `mvn -B clean package` is **BUILD SUCCESS** at **02:10**, main
 jar **60,236 bytes / 30 entries / 17 classes**, `major version: 52`; the same command on JDK 21 gives
-**242/242** at **02:17**, jar **60,650 bytes**, same entries and class count;
+**242 tests, 1 skipped** at **02:17**, jar **60,650 bytes**, same entries and class count;
 `javac -Xlint:all -Xpkginfo:always` reports **0 warnings** and `javadoc -Xdoclint:all,-missing`
 **0 errors**.
 

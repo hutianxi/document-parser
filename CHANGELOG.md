@@ -8,6 +8,24 @@
 
 ---
 
+## 1.2.1 — 2026-10-24（未发布）
+
+### 构建 / 依赖
+
+- Jackson 2.13.5 → 2.21.8，修复 CVE-2026-83557 / 68497 / 19032 / 89425 / 89407 / 91776，以及
+  CVE-2026-110879 / GHSA-m8xf-2cr7-77ph（2026-10-20 发布，CVE-2026-54512 的不完整修复：泛型参数与数组元素类型
+  仍可绕过 PolymorphicTypeValidator）。2.21.8 的 `DatabindContext` 新增数组元素类型校验，
+  `ApprovedBaseTypeValidator` 只在该版本出现；2.21.7 及更早版本没有这些代码。Jackson 2.x 仍是 Java 8 字节码
+  （`ObjectMapper.class` 的 major version 为 52），JDK 8 与 JDK 21 下各跑一遍 `mvn -B clean package` 都是
+  **242 条测试、0 失败 0 错误、1 条跳过**；JDK 8 的主 jar 为 **60777 字节、30 个条目、17 个 class**，JDK 21 同一份源码为
+  **61190 字节**、条目数与 class 数相同。
+- 测试依赖从 `spring-boot-starter-test` 换成 `org.junit.jupiter:junit-jupiter`（5.8.2，仍由父 pom 管理）：
+  不再把 spring-boot 2.7.18、Spring Framework 5.3.31、logback 1.2.12、snakeyaml 1.30、log4j-api 2.17.2、
+  json-smart 2.4.11 / json-path 2.7.0、assertj 3.22.0、xmlunit 2.9.1、asm 9.3 带进测试类路径。
+  对外 API、返回结构与解析行为不变。
+
+1.2.0 已在 Central 发布，但其 POM 仍指向 Jackson 2.21.7；要拿到 2.21.8 需要用 1.2.1。
+
 ## 1.2.0 — 2026-10-23
 
 `pom.xml` 已升到 `1.2.0`，`mvn -B clean package` 的产物是 `document-parser-1.2.0.jar`。
@@ -231,7 +249,7 @@
   **242 条、0 失败、0 错误、1 跳过**；
   主 jar **60236 字节 / 30 个条目 / 17 个 class**、`major version: 52`；`javac -Xlint:all -Xpkginfo:always`
   **0** 告警（17 个 class，含 `package-info.class`）、`javadoc -Xdoclint:all,-missing` **0** 错误；
-  `mvn -B test` 不加 `-DargLine` 也是 **242/242**，那一行只影响控制台与报告里的中文编码。
+  `mvn -B test` 不加 `-DargLine` 也是 **242 条、0 失败、1 跳过**，那一行只影响控制台与报告里的中文编码。
   JDK 21 跑同一条 `clean package`：**02:17**、jar **60650 字节**、条目与 class 数同上、字节码仍是
   `major version: 52` —— 同一份源码换个 JDK 打包，字节数会差几百个，jar 大小别当校验和用。
   这两轮是 `1.2.0` 版本号下的发版构建；同一批源码在更安静的一轮里是 01:25（JDK 8）与 01:32（JDK 21），
@@ -315,7 +333,7 @@
 后五类按作者要求只留本地、不入库，`git status --ignored` 里都是 `!!`。
 
 **最终校验**：`1.2.0` 版本号下，JDK 8 `mvn -B clean package` **BUILD SUCCESS**、**02:10**，主 jar
-**60236 字节 / 30 个条目 / 17 个 class**、`major version: 52`；JDK 21 同一条命令 **242/242**、**02:17**、
+**60236 字节 / 30 个条目 / 17 个 class**、`major version: 52`；JDK 21 同一条命令 **242 条、1 跳过**、**02:17**、
 jar **60650 字节**，条目与 class 数同上；`javac -Xlint:all -Xpkginfo:always` **0** 告警、
 `javadoc -Xdoclint:all,-missing` **0** 错误。
 

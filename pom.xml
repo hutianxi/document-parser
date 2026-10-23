@@ -13,7 +13,7 @@
          与 Java 包名 cn.net.tianxi.document 保持一致 -->
     <groupId>cn.net.tianxi</groupId>
     <artifactId>document-parser</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
     <name>document-parser</name>
     <description>文档解析模块：把 Word/PDF/PPT 统一解析成文本、表格、图片三个集合。源码 GitHub hutianxi/document-parser，国内镜像 Gitee mailtianxi/document-parser</description>
     <url>https://github.com/hutianxi/document-parser</url>
@@ -61,6 +61,12 @@
         <java.version>1.8</java.version>
         <!-- Aspose 各产品同版本线，jdk16 classifier 才是 Java 8 可用的字节码 -->
         <aspose.version>23.12</aspose.version>
+        <!-- 覆盖 Boot 2.7.18 管理的 Jackson 2.13.5：CVE-2026-83557 / 68497 / 19032 在 2.21.6 修复，
+             CVE-2026-89425 / 89407 / 91776 在 2.21.7 修复，
+             CVE-2026-110879（CVE-2026-54512 的不完整修复：泛型参数与数组元素类型仍可逃逸
+             PolymorphicTypeValidator）在 2.21.8 修复。Jackson 2.x 仍是 Java 8 字节码
+             （jackson-databind 的 MANIFEST 写着 X-Compile-Target-JDK: 1.8），不会抬高本库的语言级别。 -->
+        <jackson-bom.version>2.21.8</jackson-bom.version>
     </properties>
 
     <repositories>
@@ -100,10 +106,14 @@
             <classifier>jdk16</classifier>
         </dependency>
 
-        <!-- 测试框架（JUnit 5）；本模块没有 Spring 容器相关的代码 -->
+        <!-- 测试只用 JUnit 5 的 Jupiter API，不需要 Spring Boot 的测试套件。
+             这里刻意不引 spring-boot-starter-test：它会把 spring-boot 2.7.18、Spring Framework 5.3.x、
+             logback 1.2.x、snakeyaml 1.30、log4j-api 2.17.2、json-smart/json-path、assertj、xmlunit、asm
+             全部带进测试类路径，而这些组件在 2.7.x 线已经没有可用的安全修复版本。
+             版本仍交给 Boot 2.7.18 的 BOM 管理（当前 JUnit 5.8.2），需要升级时再显式写版本。 -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
