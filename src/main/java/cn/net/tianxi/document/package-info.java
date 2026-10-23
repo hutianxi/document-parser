@@ -22,14 +22,15 @@
  *   "tables": [
  *     { "headers": ["片区","区域","销售额","回款率","销售额-5","回款率-6","备注"],
  *       "rows": [ {"片区":"华东大区","区域":"上海","销售额":"1280","回款率":"92%",
- *                  "销售额-5":"1465","回款率-6":"95%","备注":"超额完成"} ] }
+ *                  "销售额-5":"1465","回款率-6":"95%","备注":"超额完成"} ],
+ *       "source": {"page":1} }
  *   ],
  *   "images": [ {"fileName":"image-1.png","type":"PNG","width":1024,"height":768,"size":670939,
  *                "contentId":"487e915db2c53907e8c1551aeaffea235423210c"} ]
  * }
  * </pre>
  * 这份样例静默模式下的实测规模：正文 13 段、7 个表头组共 30 行、1 张图片；
- * {@code toJson} 出来 4409 个字符，改用 {@code ImageMode.BASE64} 是 899039 个字符。
+ * {@code toJson} 出来 4740 个字符，改用 {@code ImageMode.BASE64} 是 899370 个字符。
  * 同源的 {@code sales-report.pdf}（3 页）与 {@code sales-report.pptx}（3 页）规模见各自的解析器类说明。
  *
  * <h2>表格：一个表头对应它下面的行</h2>
@@ -46,16 +47,42 @@
  * Options.fullRow(FullRow)} 决定保留还是丢弃。Word 里单元格内再套一张表时，子表不进母表格子的文本，
  * 作为 {@code tables} 里额外的元素排在母表分组之后。
  *
+ * <p>每组还有一个 {@code source} 键记来源位置：{@code {"page": 起始页}}，跨页的表另带 {@code "lastPage"}；
+ * docx 是 {@code LayoutCollector} 算出的页码、pdf 是页码、pptx 是幻灯片序号，都从 1 起，
+ * 给不出位置的格式整键不写。同一张物理表切出的多组写同一段页码（组按表头切，不按页切）。
+ * 不需要回填原文位置时 {@link cn.net.tianxi.document.WordParser.Options#source(boolean) Options.source(false)}
+ * 把这个键关掉 —— 三种格式一起生效，关掉后每组只剩 {@code headers} 与 {@code rows}，Word 侧连版面都不算。
+ *
+ * <p>{@code name} 是<b>可选</b>的第二层标识：注册表头时用
+ * {@link cn.net.tianxi.document.WordParser.Options#name(String) Options.name(String)} 给那一组起名，
+ * 命中之后这一组多一个 {@code name} 键，取值就不用记住「第几组」——
+ * {@link cn.net.tianxi.document.WordParser#tablesByName(java.util.Map, String) tablesByName} 拿组、
+ * {@link cn.net.tianxi.document.WordParser#rowsByName(java.util.Map, String) rowsByName} 直接把同名各组的行拼平，
+ * 适合「读了文档只挑要入库的那几张表起名」的接法。四条实测要点：不起名时结果与静默模式<b>逐字节相同</b>
+ * （docx 4740 字符不变，起名后 4828）；一个名字可以命中<b>多组</b>（docx 的 {@code 年度目标} 命中第 6、7 组，
+ * 同一张物理表的两段表头），所以它不是主键；多级表头<b>合并之后</b>等于注册列名也算命中（合并完会拿合并结果
+ * 再比一次），所以照合并后那一行注册在三种格式都命得中 —— docx 的台账实测 13 行全部取得到；
+ * 同一个名字之下只要有一份注册命中了，命不中的那份不再触发「表头集合未匹配到任何行」的提示
+ * （规则在 {@link cn.net.tianxi.document.Tables}）。四个键的先后固定为 {@code headers} → {@code rows}
+ * → {@code name} → {@code source}。
+ *
+ * <p>顶层键默认只有 {@code text}／{@code tables}／{@code images} 三个。打开
+ * {@link cn.net.tianxi.document.WordParser.Options#unmatchedHeaders(boolean) Options.unmatchedHeaders(true)}
+ * 会多一个 {@code unmatchedHeaders}，把「注册了却一组都没命中」的表头集合随结果一起返回（与标准错误那条提示
+ * 同一份规则）。默认关：顶层多一个键会让按 POJO 反序列化的下游撞上未知字段，而提示本来就在标准错误上。
+ *
  * <h2>读到什么、读不到什么</h2>
  * <ul>
  *   <li><b>Word</b>：各节 Body 的段落、表格、图片，文本框文字与块级内容控件（{@code w:sdt}）包住的段落表格都能读到；
  *       控件没填写时它自带的占位文字（{@code Click here to enter text.}）不会进 {@code text} ——
  *       那句提示存在 {@code w:sdtPr/w:placeholderText} 里，属于 Word 的显示层，不是文档内容；
  *       页眉页脚、脚注尾注、批注不读（版式附属内容，评估水印就注入在那里）；</li>
- *   <li><b>PDF</b>：有线段边框的表格靠几何还原，跨页断开的长表并回一张（跨三页以上也是一路并下去；
+ *   <li><b>PDF</b>：有线段边框的表格靠几何还原，跨页断开的长表并回一张（跨三页也是一路并下去；
  *       没注册表头依据时靠「一截贴页底、一截贴页首」认定是同一张表被切断，所以上一页最后那一行很高时会被拆成两组）；
- *       <u>没有边框线的表格</u>识别不出来，
- *       会被当成普通段落进 {@code text}；扫描件／图片型 PDF 没有文字层，需要 OCR；</li>
+ *       <u>没有边框线的表格</u>在线段引擎里识别不出来，第二遍流式引擎只补收「每行格数相同、且不与任何有线表重叠」
+ *       的那几张（实测无边框样例 0 组 &rarr; 3 组，有线样例一组没多）；代价是用制表位排齐的几行散文本满足同样条件，
+ *       会被当成一张表从 {@code text} 挪进 {@code tables}（{@code PdfBorderlessTableTest} 把这个误报写死成断言）；
+ *       扫描件／图片型 PDF 没有文字层，需要 OCR；</li>
  *   <li><b>PPT</b>：正片各页的形状文字、表格、图片（组合形状递归展开；视频帧走图片那一支，收的是封面图）；
  *       备注页／母版、SmartArt 图形内的文字、图表数据、嵌入的 OLE 对象里的内容、形状填充底图不读。</li>
  * </ul>
@@ -99,8 +126,8 @@
  *   <li>外链图片（Word「链接到文件」）只回报路径，本模块不会去读那个文件，也不会联网；</li>
  *   <li>{@code contentId} 是内容指纹，只为去重和缓存服务，不是防篡改摘要；</li>
  *   <li>递归深度都有上限，超过就跳过并提示，避免畸形文件把栈撑爆：PPT 组合形状 32 层
- *       （{@link cn.net.tianxi.document.PptParser}），Word Body 之下容器节点 16 层、表格嵌套 8 层
- *       （{@link cn.net.tianxi.document.WordParser}）；</li>
+ *       （{@link cn.net.tianxi.document.PptParser}），Word Body 之下容器节点 16 层、表格读 8 层
+ *       （第 9 层起跳过，提示只在真要跳内容时出现；{@link cn.net.tianxi.document.WordParser}）；</li>
  *   <li>大文件与内存：base64/bytes 模式会把图片字节都留在结果里，图片多的文档请用 {@code FILE} 或
  *       {@code META}；OOXML（docx/pptx）是压缩包，解压后全量进内存，压缩比极高的畸形文件可能直接把进程撑爆，
  *       所以上传/落盘环节要有大小上限，解析调用最好带超时与独立线程池；</li>

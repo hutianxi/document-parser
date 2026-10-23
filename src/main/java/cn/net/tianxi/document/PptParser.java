@@ -1,28 +1,10 @@
 package cn.net.tianxi.document;
 
-import com.aspose.slides.IAutoShape;
-import com.aspose.slides.ICell;
-import com.aspose.slides.IGroupShape;
-import com.aspose.slides.IPPImage;
-import com.aspose.slides.IPictureFillFormat;
-import com.aspose.slides.IPictureFrame;
-import com.aspose.slides.IShape;
-import com.aspose.slides.IShapeCollection;
-import com.aspose.slides.ISlidesPicture;
-import com.aspose.slides.ITable;
-import com.aspose.slides.ITextFrame;
-import com.aspose.slides.License;
-import com.aspose.slides.Presentation;
+import com.aspose.slides.*;
 
 import java.io.File;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * ppt/pptx 解析工具类：一次调用返回三个集合 —— 文本、表格集合、图片集合，返回结构与 {@link WordParser} 完全一致。
@@ -42,19 +24,24 @@ import java.util.Set;
  * {@code 2025年 / 销售业绩 / 华东大区 / 回款率 / 86% / 达标 / 数据来源 / 销售系统 / 财务对账}
  * （最后三个在一个<b>组合形状</b>里，不递归展开就整组丢掉）；{@code tables} 6 个表头组共 22 行；
  * {@code images} 1 张 PNG（1024×768、670939 字节、{@code contentId} = {@code 487e915db2c53907e8c1551aeaffea235423210c}，
- * 与 docx 样例里那张是同一份字节，指纹因此相同）。默认 {@code META} 模式整串 JSON 3262 个字符，
- * {@code BASE64} 模式 897892 个字符。换选项：注册 5 组真表头 6 组／21 行、{@code DROP} 5 组／19 行、
- * {@code FIRST} 6 组／22 行。核心表与 docx／pdf <b>逐格相同</b>（列名
+ * 与 docx 样例里那张是同一份字节，指纹因此相同）。默认 {@code META} 模式整串 JSON 3526 个字符，
+ * {@code BASE64} 模式 898156 个字符。每组的 {@code source} 里 {@code page} 是<b>幻灯片序号</b>（样例实测
+ * 第 1／2／3 页各出现，见 {@link Tables#markSource}）；幻灯片不跨页，所以不会有 {@code lastPage}，
+ * 不要这个键时 {@code Options.source(false)} 同样把它去掉（三种格式一起生效）。
+ * 换选项：注册 5 组真表头 6 组／21 行、{@code DROP} 5 组／19 行、
+ * {@code FIRST} 6 组／22 行。注册时给三组起名（{@code Options.name(String)}）是 6 组／21 行／3466 个字符，
+ * 带 {@code name} 的是第 1、2、4、5 组（台账在幻灯片网格里出现的也是合并后那一行，所以命中）；核心表与 docx／pdf <b>逐格相同</b>（列名
  * {@code ["片区","区域","销售额","回款率","销售额-5","回款率-6","备注"]}，4 行数据一字不差）。
- * <i>（测试：{@code PptParserTest}、{@code CrossFormatTest}）</i>
+ * <i>（测试：{@code PptParserTest}、{@code PptParserTextTest}、{@code CrossFormatTest}）</i>
  *
  * <h2>形状怎么分发</h2>
  * 一页幻灯片就是一段文档流，形状按幻灯片上的顺序依次进入结果 ——
  * <ol>
  *   <li>{@link ITable} 读成网格：每个单元格用 {@code getFirstRowIndex/getFirstColumnIndex} 找到自己合并的起点，
  *       起点格的文本按 {@code rowSpan}/{@code colSpan} 铺满它覆盖的所有格子，与 {@link WordParser} 展开
- *       {@code gridSpan}/{@code vMerge} 之后的网格一致；整行只余一个起点格时即跨整行的合并行（小标题、分组行），
- *       去向由 {@link WordParser.Options#fullRow(WordParser.FullRow)} 决定。样例目标表的 {@code 2025年}
+ *       {@code gridSpan}/{@code vMerge} 之后的网格一致；整行只余一个「不是横向合并延续格」的格子、且这一行
+ *       不是全空时即跨整行的合并行（小标题、分组行），去向由 {@link WordParser.Options#fullRow(WordParser.FullRow)} 决定。
+ *       样例目标表的 {@code 2025年}
  *       出现在任何表头之前，于是另起一组、列名补成 {@code ["列1","列2","列3","列4"]}；</li>
  *   <li>{@link IAutoShape}（文本框、形状里的文字）按段落进 {@code text}；</li>
  *   <li>{@link IPictureFrame} 的 {@link IPPImage} 二进制进 {@code images}；</li>
@@ -97,10 +84,14 @@ import java.util.Set;
  */
 public final class PptParser {
 
-    /** Aspose.Slides 评估模式截断文本时留下的提示，不是内容。 */
+    /**
+     * Aspose.Slides 评估模式截断文本时留下的提示，不是内容。
+     */
     private static final String TRUNCATION_NOTICE = "... text has been truncated due to evaluation version limitation.";
 
-    /** 组合形状最多递归展开的层数：正常文件只有几层，深的多半是损坏或故意构造出来撑爆栈的。 */
+    /**
+     * 组合形状最多递归展开的层数：正常文件只有几层，深的多半是损坏或故意构造出来撑爆栈的。
+     */
     private static final int MAX_GROUP_DEPTH = 32;
 
     private PptParser() {
@@ -116,17 +107,23 @@ public final class PptParser {
         return parse(open(filePath), WordParser.options().keywords(headerKeywords));
     }
 
-    /** 从输入流解析，语义同 {@link #parse(String, String...)}。 */
+    /**
+     * 从输入流解析，语义同 {@link #parse(String, String...)}。
+     */
     public static Map<String, Object> parse(InputStream inputStream, String... headerKeywords) throws Exception {
         return parse(open(inputStream), WordParser.options().keywords(headerKeywords));
     }
 
-    /** 按选项解析，可注册完整表头集合、整行合并行的去向与图片输出方式，同 {@link WordParser#parse(String, WordParser.Options)}。 */
+    /**
+     * 按选项解析，可注册完整表头集合、整行合并行的去向与图片输出方式，同 {@link WordParser#parse(String, WordParser.Options)}。
+     */
     public static Map<String, Object> parse(String filePath, WordParser.Options options) throws Exception {
         return parse(open(filePath), options);
     }
 
-    /** 从输入流按选项解析，语义同 {@link #parse(String, WordParser.Options)}；流本身由调用方关闭。 */
+    /**
+     * 从输入流按选项解析，语义同 {@link #parse(String, WordParser.Options)}；流本身由调用方关闭。
+     */
     public static Map<String, Object> parse(InputStream inputStream, WordParser.Options options) throws Exception {
         return parse(open(inputStream), options);
     }
@@ -161,24 +158,18 @@ public final class PptParser {
 
         for (int s = 0; s < presentation.getSlides().size(); s++) {
             readShapes(presentation.getSlides().get_Item(s).getShapes(), options, paragraphs, tables, images,
-                    matchedGroups, 0);
+                    matchedGroups, s + 1, 0);
         }
-        warnUnmatchedHeaders(options, matchedGroups);
+        List<Map<String, Object>> unmatched = Tables.warnUnmatchedHeaders("[PptParser] ", options, matchedGroups);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("text", Results.join(paragraphs, "\n"));
         result.put("tables", tables);
         result.put("images", images.list());
-        return result;
-    }
-
-    /** 注册了却一行都没命中的表头集合提示到标准错误输出，规则同 {@link WordParser}。 */
-    private static void warnUnmatchedHeaders(WordParser.Options options, Set<Integer> matchedGroups) {
-        for (int i = 0; i < options.headerGroupCount(); i++) {
-            if (!matchedGroups.contains(i)) {
-                System.err.println("[PptParser] 表头集合未匹配到任何行：" + options.headerGroup(i));
-            }
+        if (options.writesUnmatchedHeaders()) {
+            result.put("unmatchedHeaders", unmatched);
         }
+        return result;
     }
 
     /**
@@ -206,12 +197,17 @@ public final class PptParser {
      * 都读不到）；形状填充底图同理，属于已知范围外。
      */
     private static void readShapes(IShapeCollection shapes, WordParser.Options options,
-                                  List<String> paragraphs, List<Map<String, Object>> tables,
-                                  Images images, Set<Integer> matchedGroups, int depth) throws Exception {
+                                   List<String> paragraphs, List<Map<String, Object>> tables,
+                                   Images images, Set<Integer> matchedGroups, int slide, int depth) throws Exception {
         for (int i = 0; i < shapes.size(); i++) {
             IShape shape = shapes.get_Item(i);
             if (shape instanceof ITable) {
-                tables.addAll(parseTable((ITable) shape, options, matchedGroups));
+                List<Map<String, Object>> groups = parseTable((ITable) shape, options, matchedGroups);
+                // 一张表只在一页幻灯片上（pptx 没有「跨页表」这回事），起止页写同一个序号
+                if (options.writesSource()) {
+                    Tables.markSource(groups, slide, slide);
+                }
+                tables.addAll(groups);
             } else if (shape instanceof IPictureFrame) {
                 addImage(images, (IPictureFrame) shape);
             } else if (shape instanceof IGroupShape) {
@@ -221,7 +217,7 @@ public final class PptParser {
                     continue;
                 }
                 readShapes(((IGroupShape) shape).getShapes(), options, paragraphs, tables, images,
-                        matchedGroups, depth + 1);
+                        matchedGroups, slide, depth + 1);
             } else if (shape instanceof IAutoShape) {
                 ITextFrame frame = ((IAutoShape) shape).getTextFrame();
                 if (frame != null) {                     // 占位符被删过之类的形状可能没有文本框
@@ -233,17 +229,33 @@ public final class PptParser {
 
     /* ---------------- 文本 ---------------- */
 
-    /** 一个文本框按段落拆成多行，行内空白统一清洗，与 {@link WordParser} 的段落文本一致。 */
+    /**
+     * 一个文本框按段落拆成多行，行内空白统一清洗，与 {@link WordParser} 的段落文本一致。
+     */
     private static void addText(List<String> paragraphs, String text) {
+        paragraphs.addAll(textLines(text));
+    }
+
+    /**
+     * 把 {@link ITextFrame#getText()} 的整段文字拆成清洗过的非空行。
+     *
+     * <p>Aspose.Slides 用 {@code \r} 分隔段落（Windows 换行则是 {@code \r\n}），不能只按 {@code \n} 拆：
+     * {@link Results#clean} 会把 {@code \r} 转成空格，多段文本框就会被压成一行。三种换行都认。
+     *
+     * <p>包级可见只为单测：评估模式一个文本框只给第一段，端到端测试照不到多段的情况。
+     */
+    static List<String> textLines(String text) {
+        List<String> lines = new ArrayList<String>();
         if (text == null) {
-            return;
+            return lines;
         }
-        for (String line : text.split("\n")) {
+        for (String line : text.split("\r\n|\r|\n")) {
             String clean = stripEvaluationNotice(Results.cleanContent(line));
             if (clean.length() > 0) {
-                paragraphs.add(clean);
+                lines.add(clean);
             }
         }
+        return lines;
     }
 
     /* ---------------- 表格：一个表头对应它下面的行 ---------------- */
@@ -256,9 +268,21 @@ public final class PptParser {
      *   <li>逐格用 {@code getFirstRowIndex/getFirstColumnIndex} 找到它合并的起点，不是起点的格子跳过；</li>
      *   <li>起点格的文本按 {@code rowSpan}/{@code colSpan} 铺满它覆盖的所有格子，得到与 {@link WordParser}
      *       展开 {@code gridSpan}/{@code vMerge} 之后一致的网格；</li>
-     *   <li>统计每行有几个起点格：整行只剩一个，即跨整行的合并行（小标题、分组行）；</li>
+     *   <li>统计每行有几个<b>不是横向合并延续格</b>的格子（{@code getFirstColumnIndex() == c}）：整行只剩一个、
+     *       且这一行不是全空，才算跨整行的合并行（小标题、分组行）。空白合并行只是排版间隔，当成分组行的话
+     *       紧跟它的那一行会被当成表头 —— 实测两列表中间插一行空白合并行时一张表被切成两组、{@code 丙丁}
+     *       那一行变成了列名（{@code PptParserTest.blankFullWidthMergedRowIsNotASeparator}）；</li>
      *   <li>标题行线索用 {@code getFirstRow()}（样式上的首行标题），它只是弱线索，跨多组表头时仍建议注册完整表头。</li>
      * </ol>
+     *
+     * <h3>为什么纵向合并的延续格也要算进「这一行自己的格子」</h3>
+     * 判据只排除<b>横向</b>延续格，与 {@link WordParser} 的 {@code Grid.isSeparator}、{@link PdfParser} 的
+     * {@code toGrid} 是同一条：某一列纵向合并到上一行时（大分类列、序号列很常见），这一行其余格子仍是自己的数据。
+     * 早先这里数的是「起点格」（{@code getFirstRowIndex() == r} 且 {@code getFirstColumnIndex() == c}），
+     * 于是「A 列纵向合并跨两行 + B 列每行各有值」的两列表里，第二行只剩 B 一个起点格、被当成跨整行的分组行：
+     * 实测 {@code KEEP} 把 {@code 值二} 抹成空串（{@code [{列A:第一,列B:值一},{列A:第一,列B:}]}）、
+     * {@code DROP} 整行删掉，同一份版面的 docx 两种模式都读到 {@code 值二}。改成只排除横向延续格后
+     * 两种模式都与 docx 一致（{@code PptParserTest.verticallyMergedDataRowIsNotAMistakenSeparator}）。
      *
      * <h3>两处防御</h3>
      * {@code isMergedCell()} 对起始格同样返回 true，不能用来区分，所以这里改用「起点下标等于自己」判断；
@@ -272,15 +296,17 @@ public final class PptParser {
         for (String[] row : values) {
             Arrays.fill(row, "");
         }
-        int[] origins = new int[rowCount];          // 每行真正持有内容的格子数
+        int[] origins = new int[rowCount];          // 每行「不是横向合并延续格」的格子数
 
         for (int r = 0; r < rowCount; r++) {
             for (int c = 0; c < columnCount; c++) {
                 ICell cell = table.getRows().get_Item(r).get_Item(c);
+                if (cell.getFirstColumnIndex() == c) {
+                    origins[r]++;                   // 纵向合并的延续格也算：见下面 separator 的说明
+                }
                 if (cell.getFirstRowIndex() != r || cell.getFirstColumnIndex() != c) {
                     continue;                       // 被别的格合并覆盖，内容在起始格里
                 }
-                origins[r]++;
                 ITextFrame cellFrame = cell.getTextFrame();      // 老文件里的非常规单元格可能没有文本框
                 String text = cellFrame == null ? "" : stripEvaluationNotice(Results.cleanContent(cellFrame.getText()));
                 int spannedRows = Math.max(1, cell.getRowSpan());
@@ -295,8 +321,12 @@ public final class PptParser {
 
         boolean[] separator = new boolean[rowCount];
         for (int r = 0; r < rowCount; r++) {
-            // 整行只剩一个起点格 —— 跨整行的合并行（小标题、分组行）
-            separator[r] = columnCount > 1 && origins[r] == 1;
+            boolean blank = true;
+            for (int c = 0; c < columnCount; c++) {
+                blank &= values[r][c].length() == 0;
+            }
+            // 整行只剩一个「不是横向合并延续格」的格子、又不是全空 —— 跨整行的合并行（小标题、分组行）
+            separator[r] = columnCount > 1 && origins[r] == 1 && !blank;
         }
         return Tables.group(values, separator, null, options, matchedGroups, table.getFirstRow());
     }
@@ -326,19 +356,25 @@ public final class PptParser {
 
     /* ---------------- 输出 ---------------- */
 
-    /** 序列化成缩进 JSON，同 {@link WordParser#toJson(Object)}。 */
+    /**
+     * 序列化成缩进 JSON，同 {@link WordParser#toJson(Object)}。
+     */
     public static String toJson(Object value) throws Exception {
         return Results.toJson(value);
     }
 
-    /** 把 {@link WordParser.ImageMode#BASE64} 结果里的图片落成文件，同 {@link WordParser#writeImages}。 */
+    /**
+     * 把 {@link WordParser.ImageMode#BASE64} 结果里的图片落成文件，同 {@link WordParser#writeImages}。
+     */
     public static void writeImages(Map<String, Object> result, File directory) throws Exception {
         Results.writeImages(result, directory);
     }
 
     /* ---------------- 通用 ---------------- */
 
-    /** classpath 或当前目录存在 aspose-slides.lic 时自动注册（一个进程只需一次），避免评估模式截断文本。 */
+    /**
+     * classpath 或当前目录存在 aspose-slides.lic 时自动注册（一个进程只需一次），避免评估模式截断文本。
+     */
     private static void applyLicenseIfPresent() {
         Results.applyLicense("aspose-slides", "/aspose-slides.lic", "aspose-slides.lic",
                 stream -> new License().setLicense(stream));
@@ -355,13 +391,17 @@ public final class PptParser {
         return new Presentation(filePath);
     }
 
-    /** 同上，从输入流加载；{@link #parse} 会负责 {@code dispose}，传入的流本身由调用方关闭。 */
+    /**
+     * 同上，从输入流加载；{@link #parse} 会负责 {@code dispose}，传入的流本身由调用方关闭。
+     */
     private static Presentation open(InputStream inputStream) throws Exception {
         applyLicenseIfPresent();
         return new Presentation(inputStream);
     }
 
-    /** 去掉评估模式追加在文本末尾的截断提示；剩下的内容若是水印则当成空。 */
+    /**
+     * 去掉评估模式追加在文本末尾的截断提示；剩下的内容若是水印则当成空。
+     */
     private static String stripEvaluationNotice(String text) {
         int index = text.indexOf(TRUNCATION_NOTICE);
         return index < 0 ? text : Results.cleanContent(text.substring(0, index));

@@ -6,12 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.util.Base64;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -52,21 +47,25 @@ import java.util.regex.Pattern;
  * <table border="1">
  *   <caption>{@code toJson} 结果长度：默认 META vs BASE64</caption>
  *   <tr><th>样例</th><th>{@code META}（默认）</th><th>{@code BASE64}</th></tr>
- *   <tr><td>sales-report.docx（PNG 1024×768，670939 字节）</td><td>4409</td><td>899039</td></tr>
- *   <tr><td>sales-report.pdf（JPEG 699×524，38668 字节）</td><td>6186</td><td>57789</td></tr>
- *   <tr><td>sales-report.pptx（同 docx 那张 PNG）</td><td>3262</td><td>897892</td></tr>
+ *   <tr><td>sales-report.docx（PNG 1024×768，670939 字节）</td><td>4740</td><td>899370</td></tr>
+ *   <tr><td>sales-report.pdf（JPEG 699×524，38668 字节）</td><td>6473</td><td>58076</td></tr>
+ *   <tr><td>sales-report.pptx（同 docx 那张 PNG）</td><td>3526</td><td>898156</td></tr>
  * </table>
- * 这就是 {@link WordParser.ImageMode} 默认选 {@code META} 的理由：一份 670KB 的截图会让 JSON 从 4.4KB 涨到 899KB。
+ * 这就是 {@link WordParser.ImageMode} 默认选 {@code META} 的理由：一份 670KB 的截图会让 JSON 从 4.7KB 涨到 899KB。
  *
  * <p>单元测试见 {@code ResultsTest}（28 条），其中 {@link #safeName} 与 {@link #writeImages} 的越权写入、
  * 重名覆盖、无内容告警各有专门用例。
  */
 final class Results {
 
-    /** ObjectMapper 线程安全，建一次复用即可；原来每次 {@code toJson} 都新建一个。 */
+    /**
+     * ObjectMapper 线程安全，建一次复用即可；原来每次 {@code toJson} 都新建一个。
+     */
     private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
-    /** {@link #clean} 用：连续空格压成一个。 */
+    /**
+     * {@link #clean} 用：连续空格压成一个。
+     */
     private static final Pattern TEXT_SPACES = Pattern.compile(" {2,}");
 
     /**
@@ -79,10 +78,14 @@ final class Results {
      */
     private static final Pattern ALL_SPACES = Pattern.compile("[\\s\u3000\u00a0\u2007\u202f]+");
 
-    /** 已经成功注册过许可证的产品名，见 {@link #applyLicense}。 */
+    /**
+     * 已经成功注册过许可证的产品名，见 {@link #applyLicense}。
+     */
     private static final Set<String> LICENSED = new HashSet<String>();
 
-    /** {@link #isEvaluationNotice} 用：评估水印去掉空格、转小写之后的特征片段。 */
+    /**
+     * {@link #isEvaluationNotice} 用：评估水印去掉空格、转小写之后的特征片段。
+     */
     private static final String[] EVALUATION_MARKS = {
             "evaluationonly",                    // Evaluation Only.
             "createdwithaspose",                 // Created with Aspose.Words / Aspose.PDF for Java ...
@@ -95,7 +98,9 @@ final class Results {
     private Results() {
     }
 
-    /** 序列化成缩进 JSON。 */
+    /**
+     * 序列化成缩进 JSON。
+     */
     static String toJson(Object value) throws Exception {
         return MAPPER.writeValueAsString(value);
     }
@@ -168,7 +173,9 @@ final class Results {
         }
     }
 
-    /** 由各解析器实现：用自家产品的 {@code License} 注册这个流。 */
+    /**
+     * 由各解析器实现：用自家产品的 {@code License} 注册这个流。
+     */
     interface LicenseApplier {
         void setLicense(InputStream stream) throws Exception;
     }
@@ -201,7 +208,9 @@ final class Results {
         }
     }
 
-    /** 关掉流，失败当作没发生：许可证文件已经读完，关不掉也不能让解析挂掉。 */
+    /**
+     * 关掉流，失败当作没发生：许可证文件已经读完，关不掉也不能让解析挂掉。
+     */
     static void close(InputStream stream) {
         if (stream == null) {
             return;
@@ -218,9 +227,10 @@ final class Results {
      *
      * <h3>处理规则</h3>
      * <ul>
-     *   <li>换行类（{@code \r} 段落结束、软换行 {@code \u000b}、分页 {@code \u000c}）统一成空格。软换行必须算
-     *       「分隔」而不是「丢弃」：Shift+Enter 把一段话切成两行时，丢了这两个字符就变成「第一行第二行」粘连，
-     *       内容看着还在、实际读不出来；</li>
+     *   <li>换行类（{@code \r}、{@code \n}、软换行 {@code \u000b}、分页 {@code \u000c}）与不换行空格
+     *       {@code \u00a0} 统一成空格。软换行必须算「分隔」而不是「丢弃」：Shift+Enter 把一段话切成两行时，
+     *       丢了这两个字符就变成「第一行第二行」粘连，内容看着还在、实际读不出来；不换行空格换成普通空格
+     *       是为了后面「连续空格压成一个」和表头归一化能一视同仁（{@code \u00a0} 在 Word 里看着就是空格）；</li>
      *   <li>域代码丢弃、域结果保留（见下）；</li>
      *   <li>{@code \u0007}（单元格结束）等其它控制字符丢弃；</li>
      *   <li>连续空格压成一个，最后 trim。</li>
@@ -300,7 +310,9 @@ final class Results {
         return false;
     }
 
-    /** {@link #clean} + {@link #isEvaluationNotice}：整段是评估水印时返回空串，调用方按空文本跳过即可。 */
+    /**
+     * {@link #clean} + {@link #isEvaluationNotice}：整段是评估水印时返回空串，调用方按空文本跳过即可。
+     */
     static String cleanContent(String raw) {
         String clean = clean(raw);
         return isEvaluationNotice(clean) ? "" : clean;

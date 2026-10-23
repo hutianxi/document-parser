@@ -13,7 +13,7 @@
 
 | 项 | 要求 | 说明 |
 | --- | --- | --- |
-| JDK | 8 及以上 | 源码与字节码级别都是 1.8（`java.version=1.8` → `-source/-target 1.8`），所以用高版本 JDK 编译产物仍是 `major version: 52`；本机在 JDK `1.8.0_191` 与 `21.0.1` 下各跑一遍完整测试都是 183 全过、1 跳过 |
+| JDK | 8 及以上 | 源码与字节码级别都是 1.8（`java.version=1.8` → `-source/-target 1.8`），所以用高版本 JDK 编译产物仍是 `major version: 52`；本机在 JDK `1.8.0_191` 与 `21.0.1` 下各跑一遍完整测试都是 242 条全过、1 跳过 |
 | Maven | 3.6+（本机实测 3.8.8） | 首次构建需联网，Aspose 构件来自 `https://repository.aspose.com/repo/` |
 | 网络 | 首次必须能访问 Aspose 仓库 | 之后可用 `mvn -o` 离线构建 |
 
@@ -23,14 +23,15 @@
 ## 2. 构建与测试
 
 ```
-mvn -B clean test          # 当前基线：183 个测试，0 失败，1 跳过（-Ddoc 入口）；JDK 8 与 JDK 21 都实测全绿
-mvn -B clean package       # 产物 target/document-parser-1.1.1.jar
+mvn -B clean test          # 当前基线：242 条测试（15 个测试类），0 失败，1 跳过（-Ddoc 入口）；JDK 8 与 JDK 21 都实测全绿
+mvn -B clean package       # 产物 target/document-parser-1.2.0.jar
 ```
 
 想直接看某个样例的解析结果（打印到控制台，同时落一份 UTF-8 文本到 `target/print/`）：
 
 ```
 mvn -B test -Dtest=PrintResultTest#printWordSample
+mvn -B test -Dtest=PrintResultTest#printAllSamplesWithRegisteredNames   # 看「注册 + 起名」每组长什么样
 mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/你的文档.docx"
 ```
 
@@ -50,12 +51,22 @@ javadoc -encoding UTF-8 -charset UTF-8 -Xdoclint:all,-missing \
    文本清洗与 JSON 只写在 `Results`，**不要在解析器里各抄一份**。
 3. **结果契约不能破**（`CrossFormatTest` 守着）：`headers` 逐个等于每一行的键；
    空表头补 `列N`、同名列补 `名-列号`；表格里的文字不在 `text` 里重复；图片顺序 = 文档流顺序。
+   每组的 `source`（`page` / 跨页再加 `lastPage`）由 `Tables.markSource` 统一写、各解析器在分组之后补，
+   `Tables.group` 本身不碰版面信息；`Options.source(false)` 时三种格式一起不写这个键，
+   每组只剩 `headers` 与 `rows`——除这一键的有无，其余契约不变。
+   每组的键顺序固定 `headers` → `rows` → `name` → `source`，`name` 由 `Tables.group` 在命中注册组的那一刻写
+   （只有命中注册组的组有，所以 `markName` 在分组内部、`markSource` 在分组外部）。
+   **注册名是对外契约的一部分**：下游按 `tablesByName` / `rowsByName` 取数，改名字或改命中口径都会让别人的代码断掉。
 4. **javadoc 里的数字必须是实测的**：本项目的类说明大量引用 `src/test/resources/` 下三份样例的真实输出
    （段数、行数、列名、JSON 字符数）。改了行为或样例，就把对应数字重新测一遍再写进去；
    没有样例可测的防御分支，要在注释里明说「无样例覆盖，由 `XxxTest` 的单元测试守着」。
    一次性探针脚本用完就删，不留进仓库。
 5. **加新格式**：写一个 `XxxParser`，把表格读成 `String[][]` + `boolean[] separator` + 可选 `boolean[] heading`，
    然后调 `Tables.group(...)`；图片交给 `new Images(options).add(...)`；`Options`、`toJson`、`writeImages` 复用。
+6. **对外可见的变化要记进更新日志**：返回结构里的键、`Options` 的方法、公开入口、行为口径只要有变化，
+   就往 [CHANGELOG.md](CHANGELOG.md) 与 [CHANGELOG.en.md](CHANGELOG.en.md) 最上方的未发布一节各补一条，
+   带上三份样例上的实测数字（长度变化、耗时区间之类）；发布时才把这一节收进正式版本条目。
+   纯内部重构、只改注释不写。
 
 ## 4. 提 PR 的流程
 
@@ -64,6 +75,8 @@ javadoc -encoding UTF-8 -charset UTF-8 -Xdoclint:all,-missing \
    **修改前后的端到端 JSON 对比**，只写「已修复」不够。
 3. 本地跑通 `mvn -B clean test`（全绿）与 doclint（0 error），把实测数字写进 PR 描述。
 4. 不要提交：`target/`、`.idea/`、`*.iml`、`*.lic`、任何真实客户文档。
+   用 Word 打开 `src/test/resources/` 下的样例时会产生 `~$les-report.docx` 这类临时所有权文件，
+   `.gitignore` 已拦住 `~$*`，但看到它躺在仓库里还是删掉为好。
    新样例文档请自己用 OOXML 手工拼或自己导出，**不要放含有真实业务数据的文件**。
 5. 维护者会按第 3 节的约定复审；合并方式是 squash，所以 PR 内的中间提交不必刻意整理。
 

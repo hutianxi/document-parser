@@ -5,13 +5,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link Images} 的单元测试：文件名编号、类型归一化、内容指纹、重复图片、四种输出模式、外链图片。
@@ -22,11 +19,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ImagesTest {
 
-    /** PNG 文件头 + 几个字节。 */
+    /**
+     * PNG 文件头 + 几个字节。
+     */
     private static final byte[] PNG = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3};
-    /** JPEG 文件头 + 几个字节（内容与 PNG 不同，指纹也不同）。 */
+    /**
+     * JPEG 文件头 + 几个字节（内容与 PNG 不同，指纹也不同）。
+     */
     private static final byte[] JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 9, 8, 7};
-    /** 认不出来的字节：既不是图片魔数，类型串也给不出。 */
+    /**
+     * 认不出来的字节：既不是图片魔数，类型串也给不出。
+     */
     private static final byte[] OPAQUE = {1, 2, 3, 4, 5, 6};
 
     private static Images images(WordParser.ImageMode mode) {
@@ -143,6 +146,22 @@ class ImagesTest {
         assertEquals("bin", Images.extension("UNKNOWN"));
         assertEquals("image/png", Images.contentType("PNG"));
         assertEquals("application/octet-stream", Images.contentType("UNKNOWN"), "未知类型不能编成 image/unknown");
+    }
+
+    @Test
+    void extensionDoesNotFollowTheDefaultLocale() {
+        // 回归：extension 曾经用不带 Locale 的 toLowerCase()，土耳其语环境下 "TIFF" 小写成 tıff（无点 ı），
+        // 文件名成了 image-1.tıff —— 任何图片查看器都不认。JVM 的默认 Locale 由部署环境决定，库不能跟着变
+        Locale original = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            assertEquals("tiff", Images.extension("TIFF"));
+            assertEquals("png", Images.extension("PNG"));
+            assertEquals("jpg", Images.extension("JPEG"));
+            assertEquals("image/tiff", Images.contentType("TIFF"), "MIME 子类型同样不能被 Locale 改掉");
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 
     /* ---------------- 内容指纹 ---------------- */

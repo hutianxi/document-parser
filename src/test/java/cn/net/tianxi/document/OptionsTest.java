@@ -6,10 +6,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link WordParser.Options} 的单元测试：默认值、null 容错、注册表头的两种写法、模式判定。
@@ -75,6 +72,14 @@ class OptionsTest {
         assertEquals(oneByOne.headerGroup(1), bulk.headerGroup(1));
         assertEquals(oneByOne.headerTitles(1), bulk.headerTitles(1));
         assertEquals(1, oneByOne.matchHeader(Arrays.asList("客户", "金额")), "命中的是第 1 组");
+
+        // 起名绑的是「最近一次注册的那一组」，批量注册内部就是按顺序逐组注册 —— 所以两种写法里名字都落在最后一组
+        oneByOne.name("台账");
+        bulk.name("台账");
+        assertEquals("台账", oneByOne.headerName(1));
+        assertEquals("", oneByOne.headerName(0), "前面的组不带名字");
+        assertEquals(bulk.headerName(1), oneByOne.headerName(1), "批量与逐组在这里也等价");
+        assertEquals("", bulk.headerName(0));
     }
 
     @Test
@@ -98,6 +103,39 @@ class OptionsTest {
     }
 
     @Test
+    void nameBindsToTheGroupRegisteredJustBeforeIt() {
+        WordParser.Options options = WordParser.options()
+                .headers("片区", "目标").name("年度目标")
+                .headers("客户", "金额").name("回款台账")
+                .headers("工单", "数量");
+
+        assertEquals("年度目标", options.headerName(0), "name 归它前面最近那次 headers 注册的那一组");
+        assertEquals("回款台账", options.headerName(1));
+        assertEquals("", options.headerName(2), "没起名字的组是空串，结果里不会出现 name 键");
+
+        // 连写两次以后者为准：配置驱动的写法里「先给默认名再覆盖」很常见
+        options.name("工单统计");
+        assertEquals("工单统计", options.headerName(2), "覆盖的是最后注册的那一组");
+        assertEquals("回款台账", options.headerName(1), "前面几组不受影响");
+    }
+
+    @Test
+    void blankNullOrPrematureNameLeavesTheGroupUnnamed() {
+        // 一组都没注册时起名字：没有归属，提示一句并忽略，不抛异常（与 imageDir 的处理方式一致）
+        WordParser.Options before = WordParser.options().name("先起名后注册");
+        assertEquals(0, before.headerGroupCount(), "name 不会凭空造出一组表头");
+
+        WordParser.Options options = WordParser.options()
+                .headers("片区", "目标").name("  年度目标  ")
+                .headers("客户", "金额").name("   ")
+                .headers("工单", "数量").name(null);
+
+        assertEquals("年度目标", options.headerName(0), "只去首尾空格，中间的空格保留");
+        assertEquals("", options.headerName(1), "全空格等于没起名");
+        assertEquals("", options.headerName(2), "null 等于没起名");
+    }
+
+    @Test
     void negativeToleranceIsClampedToAnExactMatch() {
         WordParser.Options options = WordParser.options().headers("片区", "目标").headerTolerance(-3);
 
@@ -118,5 +156,23 @@ class OptionsTest {
     void imageDirIsKeptAsGiven() {
         File directory = new File("target/images");
         assertEquals(directory, WordParser.options().imageDir(directory).imageDir());
+    }
+
+    @Test
+    void sourceIsWrittenByDefaultAndCanBeSwitchedOff() {
+        assertTrue(WordParser.options().writesSource(), "默认带 source：核对原文要翻页码");
+        assertFalse(WordParser.options().source(false).writesSource());
+        assertTrue(WordParser.options().source(false).source(true).writesSource(), "开关可以再来回去");
+    }
+
+    @Test
+    void unmatchedHeadersIsOffByDefaultAndCanBeSwitchedOn() {
+        // 与 source 相反，这个键默认关：它是顶层键，多一个会让按 POJO 反序列化的下游撞上未知字段
+        assertFalse(WordParser.options().writesUnmatchedHeaders(), "默认不带 unmatchedHeaders");
+        assertTrue(WordParser.options().unmatchedHeaders(true).writesUnmatchedHeaders());
+        assertFalse(WordParser.options().unmatchedHeaders(true).unmatchedHeaders(false).writesUnmatchedHeaders(),
+                "开关可以再来回去");
+        assertTrue(WordParser.options().source(false).unmatchedHeaders(true).writesUnmatchedHeaders(),
+                "与 source 开关互不影响");
     }
 }

@@ -1,35 +1,11 @@
 package cn.net.tianxi.document;
 
-import com.aspose.pdf.AbsorbedCell;
-import com.aspose.pdf.AbsorbedRow;
-import com.aspose.pdf.AbsorbedTable;
-import com.aspose.pdf.Document;
-import com.aspose.pdf.ImagePlacement;
-import com.aspose.pdf.ImagePlacementAbsorber;
-import com.aspose.pdf.License;
-import com.aspose.pdf.MarkupParagraph;
-import com.aspose.pdf.MarkupSection;
-import com.aspose.pdf.Page;
-import com.aspose.pdf.PageCollection;
-import com.aspose.pdf.PageMarkup;
-import com.aspose.pdf.ParagraphAbsorber;
-import com.aspose.pdf.Rectangle;
-import com.aspose.pdf.TableAbsorber;
-import com.aspose.pdf.TextFragment;
-import com.aspose.pdf.XImage;
+import com.aspose.pdf.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * pdf 解析工具类：一次调用返回三个集合 —— 文本、表格集合、图片集合，返回结构与 {@link WordParser} 完全一致。
@@ -50,9 +26,17 @@ import java.util.Set;
  * 空段落与评估水印都不进 {@code text}，所以空串是正常输出，不是「什么都没读到」）；
  * {@code tables} 6 个表头组共 45 行；{@code images} 1 张 JPEG（699×524、38668 字节、
  * {@code contentId} = {@code 80c8e65be48c09a0f173845e4dfc072bc541fb68}）。
- * 默认 {@code META} 模式整串 JSON 6186 个字符，{@code BASE64} 模式 57789 个字符。
- * 换选项：注册 5 组真表头后 JSON 与静默模式逐字节相同；{@code DROP} 5 组／43 行；{@code FIRST} 6 组／45 行。
- * <i>（测试：{@code PdfParserTest}）</i>
+ * 默认 {@code META} 模式整串 JSON 6473 个字符，{@code BASE64} 模式 58076 个字符。
+ * 每一组都带 {@code source}（起始页，跨页的台账另带 {@code lastPage}），见 {@link Tables#markSource}；
+ * 这个键不要也行 —— {@code Options.source(false)} 下三种格式一起不写，页码对 PDF 本来就免费。
+ * 换选项：注册 5 组真表头后 JSON 与静默模式逐字节相同；注册时再给三组起名（{@code Options.name(String)}）
+ * 就是 6 组／45 行／6561 个字符，带 {@code name} 的是第 1、2、5、6 组（台账的两行表头在 PDF 网格里
+ * 只给出<b>合并之后</b>那一行，所以照合并后的列名注册就命中，实测容忍度收到 0 也命中；反过来照上层那一行
+ * 「{@code 客户名称｜回款情况｜回款情况｜回款率｜备注}」注册在 PDF 上命不中，docx 与 pptx 却能命中 ——
+ * 三种格式的命中矩阵见 {@code TableByNameTest.aMultiLevelHeaderHitsByItsMergedRowInAllThreeFormats}）；
+ * {@code DROP} 5 组／43 行；{@code FIRST} 6 组／45 行。
+ * <i>（测试：{@code PdfParserTest}、{@code PdfBorderlessTableTest}、{@code PdfCrossPageTableTest}、
+ * {@code PdfMergedCellTableTest}）</i>
  *
  * <h2>表格靠几何还原</h2>
  * PDF 里不存在「表格」对象，只有画出来的线段和散落的所有文字，所以读法与 docx 完全不同：
@@ -105,15 +89,18 @@ import java.util.Set;
  * 页面上可能留着 Aspose.Words 导出的水印文字，由 {@link Results#cleanContent} 统一过滤
  * （被换行切成孤行的那半截也能认出来）。放一个 {@code aspose-pdf.lic} 到 classpath 或当前目录即可解除限制。
  *
- * <p><b>读不到的部分</b>：没有线段边框的表格（只有底色或空白对齐的版面）几何还原不出来，会以普通段落进
- * {@code text}；扫描件／图片型 PDF 没有文字层，需要 OCR，本模块不做。
+ * <p><b>读不到的部分</b>：扫描件／图片型 PDF 没有文字层，需要 OCR，本模块不做。
+ * <b>没有线段边框的表格</b>（只有底色或空白对齐）靠第二遍文字流引擎补，判据与实测的误报见
+ * {@link #flowOnlyTables}：有线表覆盖过的位置不会重复收，制表位排出来的正文段落会被当成表。
  *
  * <p>本类只有解析相关的静态方法，没有命令行入口；要单独验证一个文档，直接在测试类里调
  * {@link #parse(String, String...)} 或 {@link #parse(String, WordParser.Options)}。
  */
 public final class PdfParser {
 
-    /** 几何聚类容差（pt）：两个边界坐标相差不到这个值就当成同一条列线/行线。 */
+    /**
+     * 几何聚类容差（pt）：两个边界坐标相差不到这个值就当成同一条列线/行线。
+     */
     private static final double TOLERANCE = 2.0;
 
     /**
@@ -136,17 +123,23 @@ public final class PdfParser {
         return parse(open(filePath), WordParser.options().keywords(headerKeywords));
     }
 
-    /** 从输入流解析，语义同 {@link #parse(String, String...)}。 */
+    /**
+     * 从输入流解析，语义同 {@link #parse(String, String...)}。
+     */
     public static Map<String, Object> parse(InputStream inputStream, String... headerKeywords) throws Exception {
         return parse(open(inputStream), WordParser.options().keywords(headerKeywords));
     }
 
-    /** 按选项解析，可注册完整表头集合、整行合并行的去向与图片输出方式，同 {@link WordParser#parse(String, WordParser.Options)}。 */
+    /**
+     * 按选项解析，可注册完整表头集合、整行合并行的去向与图片输出方式，同 {@link WordParser#parse(String, WordParser.Options)}。
+     */
     public static Map<String, Object> parse(String filePath, WordParser.Options options) throws Exception {
         return parse(open(filePath), options);
     }
 
-    /** 从输入流按选项解析，语义同 {@link #parse(String, WordParser.Options)}；解析结束会关闭文档，流本身由调用方关闭。 */
+    /**
+     * 从输入流按选项解析，语义同 {@link #parse(String, WordParser.Options)}；解析结束会关闭文档，流本身由调用方关闭。
+     */
     public static Map<String, Object> parse(InputStream inputStream, WordParser.Options options) throws Exception {
         return parse(open(inputStream), options);
     }
@@ -202,30 +195,29 @@ public final class PdfParser {
         Set<Integer> matchedGroups = new LinkedHashSet<Integer>();   // 实际命中过的表头集合下标
         for (Flow flow : flows) {
             if (flow.grid != null) {
-                tables.addAll(Tables.group(flow.grid.values, flow.grid.separator, null,
-                        options, matchedGroups, false));
+                List<Map<String, Object>> groups = Tables.group(flow.grid.values, flow.grid.separator, null,
+                        options, matchedGroups, false);
+                // 跨页并起来的那一截把 page 换成了最后一段的页码，起始页另记在 startPage 上
+                if (options.writesSource()) {
+                    Tables.markSource(groups, flow.startPage, flow.page);
+                }
+                tables.addAll(groups);
             } else if (flow.text != null) {
                 paragraphs.add(flow.text);
             } else if (flow.image != null) {
                 flow.image.appendTo(images);
             }
         }
-        warnUnmatchedHeaders(options, matchedGroups);
+        List<Map<String, Object>> unmatched = Tables.warnUnmatchedHeaders("[PdfParser] ", options, matchedGroups);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("text", Results.join(paragraphs, "\n"));
         result.put("tables", tables);
         result.put("images", images.list());
-        return result;
-    }
-
-    /** 注册了却一行都没命中的表头集合提示到标准错误输出，规则同 {@link WordParser}。 */
-    private static void warnUnmatchedHeaders(WordParser.Options options, Set<Integer> matchedGroups) {
-        for (int i = 0; i < options.headerGroupCount(); i++) {
-            if (!matchedGroups.contains(i)) {
-                System.err.println("[PdfParser] 表头集合未匹配到任何行：" + options.headerGroup(i));
-            }
+        if (options.writesUnmatchedHeaders()) {
+            result.put("unmatchedHeaders", unmatched);
         }
+        return result;
     }
 
     /**
@@ -236,9 +228,13 @@ public final class PdfParser {
      * 之后 {@link #textFlows} 取段落、{@link #imageFlows} 取图片，三者都只返回带位置的 {@link Flow}，
      * 页与页之间、页内各块之间的顺序统一交给 {@link #read} 排序。
      *
+     * <h3>两遍表格识别</h3>
+     * 第一遍是默认的线段引擎；第二遍开 {@code setUseFlowEngine(true)} 的文字流引擎，只取「与第一遍任何
+     * 表格矩形都不相交、且整表每行格数一致（≥2 行 ≥2 列）」的那几张，用来补无边框表格。判据的实测依据见
+     * {@link #flowOnlyTables}。
+     *
      * <h3>调用策略</h3>
-     * 只处理 {@code getPages()} 里的正文页。PDF 里<b>没有线段边框的表格</b>（只有底色或空白对齐）识别不出来 ——
-     * 这类版面会被当成普通段落进 {@code text}，是几何还原方式的固有限制。
+     * 只处理 {@code getPages()} 里的正文页。
      */
     private static List<Flow> pageFlows(Page page, int pageNumber) {
         List<Flow> flows = new ArrayList<Flow>();
@@ -248,29 +244,158 @@ public final class PdfParser {
 
         TableAbsorber absorber = new TableAbsorber();
         absorber.visit(page);
-        for (List<AbsorbedTable> group : cluster(absorber.getTableList())) {
-            Grid grid = toGrid(group);
-            if (grid == null) {
-                continue;
+        List<AbsorbedTable> ruled = absorber.getTableList();
+        for (List<AbsorbedTable> group : cluster(ruled)) {
+            Flow flow = tableFlow(group, pageNumber, pageRect, pageHeight, tableRects);
+            if (flow != null) {
+                flows.add(flow);
             }
-            for (AbsorbedTable table : group) {
-                if (table.getRectangle() != null) {
-                    tableRects.add(table.getRectangle());
-                }
+        }
+        for (AbsorbedTable candidate : flowOnlyTables(page, ruled)) {
+            Flow flow = flowTableFlow(candidate, pageNumber, pageRect, pageHeight, tableRects);
+            if (flow != null) {
+                flows.add(flow);
             }
-            Flow flow = new Flow();
-            flow.page = pageNumber;
-            flow.top = maxURY(grid.bounds);
-            flow.left = minLLX(grid.bounds);      // 跨页续接要靠「左边界对齐」判断，取最左的那条竖线
-            flow.topGap = (pageRect.getURY() - flow.top) / pageHeight;    // 距页首多远，跨页续接判据用
-            flow.bottomGap = (minLLY(grid.bounds) - pageRect.getLLY()) / pageHeight;
-            flow.grid = grid;
-            flows.add(flow);
         }
 
         flows.addAll(textFlows(page, tableRects, pageNumber));
         flows.addAll(imageFlows(page, pageNumber));
         return flows;
+    }
+
+    /**
+     * 一组表格块（一张物理表）还原成带位置的 {@link Flow}；没有有效单元格时返回 null，表示这一组不是表。
+     */
+    private static Flow tableFlow(List<AbsorbedTable> group, int pageNumber, Rectangle pageRect,
+                                  double pageHeight, List<Rectangle> tableRects) {
+        Grid grid = toGrid(group);
+        if (grid == null) {
+            return null;
+        }
+        List<Rectangle> rects = new ArrayList<Rectangle>();
+        for (AbsorbedTable table : group) {
+            if (table.getRectangle() != null) {
+                rects.add(table.getRectangle());
+            }
+        }
+        return newFlow(grid, rects, pageNumber, pageRect, pageHeight, tableRects);
+    }
+
+    /**
+     * 流式引擎补的那张表：整表一次给出，不用聚类也聚不好，见 {@link #flowGrid}。
+     */
+    private static Flow flowTableFlow(AbsorbedTable table, int pageNumber, Rectangle pageRect,
+                                      double pageHeight, List<Rectangle> tableRects) {
+        Grid grid = flowGrid(table);
+        // 一个有效格子矩形都没有就定不了位置。实测两份无边框样例里每个格子都有矩形，这条分支没被触发过
+        if (grid == null || grid.bounds.isEmpty()) {
+            return null;
+        }
+        // 「正文要跳过的区域」用格子矩形，不用 {@code table.getRectangle()}：流式引擎给的整表外接矩形比格子
+        // 本身高出一截，实测无边框样例里表格上方那行正文（{@code PROSE}）落在外接矩形内、却落在每一个格子之外，
+        // 会被「已经在表格里」这条判据错当成表格内容丢掉，既不进 tables 也不进 text。
+        // 有线表那一支（{@link #tableFlow}）照旧用线段围出的矩形 —— 那是画出来的表边框，量不出这种虚高。
+        return newFlow(grid, new ArrayList<Rectangle>(grid.bounds), pageNumber, pageRect, pageHeight, tableRects);
+    }
+
+    private static Flow newFlow(Grid grid, List<Rectangle> rects, int pageNumber, Rectangle pageRect,
+                                double pageHeight, List<Rectangle> tableRects) {
+        tableRects.addAll(rects);
+        Flow flow = new Flow();
+        flow.page = pageNumber;
+        flow.startPage = pageNumber;
+        flow.top = maxURY(grid.bounds);
+        flow.left = minLLX(grid.bounds);      // 跨页续接要靠「左边界对齐」判断，取最左的那条竖线
+        flow.topGap = (pageRect.getURY() - flow.top) / pageHeight;    // 距页首多远，跨页续接判据用
+        flow.bottomGap = (minLLY(grid.bounds) - pageRect.getLLY()) / pageHeight;
+        flow.grid = grid;
+        return flow;
+    }
+
+    /**
+     * 文字流引擎补充的无边框表格。
+     *
+     * <h3>为什么要补、又为什么不能全收</h3>
+     * 线段引擎（{@code TableAbsorber} 的默认状态，{@code isUseFlowEngine == false}）只认得画了边框线的表，
+     * 无边框的表（只有底色或空白对齐）一张也认不出来。开流式引擎就认得：临时探针实测（跑完已删，现在由
+     * {@code PdfBorderlessTableTest} 守住同一份版面），Word 导出的「一张无边框 5 行×3 列表 + 一张同样的有线表」
+     * 默认模式只读到 1 张、流式模式读到 3 张；另一份纯散落文字的版面默认 0 张、流式 3 张。
+     * 但在本来就全有线的仓库样例上，流式模式反而把 8 块读成 5 张、并且读坏：纵向合并的行整行左移一格、
+     * 嵌套表那一行插错行次、目标表多出一列空列（35 格里 2 格、38 格里 12 格矩形无效）。所以不能整体切换，
+     * 只能拿它补漏。
+     *
+     * <h3>两条收进来的判据</h3>
+     * <ol>
+     *   <li>与线段引擎读到的任何表格矩形都不相交 —— 相交说明这块内容已经有一张更可信的有线表覆盖了；</li>
+     *   <li>行数 ≥2、列数 ≥2 且每一行的格数相同 —— 流式引擎把两张紧挨着的表切开时行格数会不齐（实测那 5 张里
+     *       就有一张是 4 列与 5 列混杂），这种残缺网格不收。</li>
+     * </ol>
+     * 在仓库样例上这两条把 5 张流式表全部挡掉（5 张都与有线表重叠），所以现有行为不变 ——
+     * 改完之后 {@code sales-report.pdf} 的 JSON 仍是 6 组／45 行、逐字节相同（后来加的 {@code source} 键
+     * 让长度从 6186 变到 6473，与这一处无关）；
+     * 代价是同一页上「有线表 + 无边框表」混排时，只有无边框那张能补进来。
+     *
+     * <h3>已知误报</h3>
+     * 用制表位排出来的三列正文（{@code A<TAB>B<TAB>C} 这种）满足上面两条，会被当成一张表，于是这部分文字从
+     * {@code text} 挪进 {@code tables}。实测那份探针版面里「4 行×3 列的制表位段落」就被补进来了，
+     * {@code PdfBorderlessTableTest} 把这个行为写死成断言，将来想改要先动测试。
+     *
+     * <h3>补进来的表怎么影响正文</h3>
+     * 每一张收进来的表都要把自己的位置登记给 {@link #textFlows}，那边「已经在表格里就不再收一遍」的判据要用。
+     * 登记的是<b>格子矩形</b>，不是流式引擎给的整表外接矩形（{@code AbsorbedTable.getRectangle()}）：
+     * 实测无边框样例里外接矩形比格子本身高出约 25pt（那一段正好是评估水印占的位置），表格上方那行正文
+     * 落在外接矩形内、却落在每一个格子之外 —— 用外接矩形这行正文就无声消失了，既没进 {@code tables}
+     * 也没进 {@code text}。现在由 {@code PdfBorderlessTableTest#proseAboveTheBorderlessTableStaysInText} 钉住。
+     * 有线表那一支（{@link #tableFlow}）照旧用线段围出的矩形，那是画出来的边框，量不出这种虚高。
+     *
+     * <h3>耗时</h3>
+     * 每页要多跑一遍引擎。仓库样例 3 页实测（JDK 21、无 lic、同一 JVM 里跑两轮）：只跑线段 478ms、
+     * 只跑流式 615ms、两遍 922ms —— 表格识别这一步慢约 1.3 倍。
+     */
+    private static List<AbsorbedTable> flowOnlyTables(Page page, List<AbsorbedTable> ruled) {
+        TableAbsorber flowEngine = new TableAbsorber();
+        flowEngine.setUseFlowEngine(true);
+        flowEngine.visit(page);
+        List<AbsorbedTable> extra = new ArrayList<AbsorbedTable>();
+        for (AbsorbedTable candidate : flowEngine.getTableList()) {
+            if (isUniformGrid(candidate) && !overlapsAny(candidate.getRectangle(), ruled)) {
+                extra.add(candidate);
+            }
+        }
+        return extra;
+    }
+
+    /**
+     * 整表每行格数相同、且至少 2 行 2 列 —— 流式引擎切错时行格数会不齐，这种残缺网格不要。
+     */
+    private static boolean isUniformGrid(AbsorbedTable table) {
+        int cells = -1;
+        for (AbsorbedRow row : table.getRowList()) {
+            if (cells < 0) {
+                cells = row.getCellList().size();
+            } else if (cells != row.getCellList().size()) {
+                return false;
+            }
+        }
+        return cells >= 2 && table.getRowList().size() >= 2;
+    }
+
+    /**
+     * 候选表和已确认的有线表格有没有压在一起（两个方向的重叠长度都大于 0 才算）。
+     */
+    private static boolean overlapsAny(Rectangle candidate, List<AbsorbedTable> ruled) {
+        if (candidate == null) {
+            return true;
+        }
+        for (AbsorbedTable table : ruled) {
+            Rectangle other = table.getRectangle();
+            if (other != null
+                    && Math.min(candidate.getURX(), other.getURX()) - Math.max(candidate.getLLX(), other.getLLX()) > 0
+                    && Math.min(candidate.getURY(), other.getURY()) - Math.max(candidate.getLLY(), other.getLLY()) > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /* ---------------- 跨页续接 ---------------- */
@@ -290,9 +415,16 @@ public final class PdfParser {
      * 后一截的上边界顶着页首（各占页高 {@value #PAGE_EDGE_REACH} 以内）。被页底切断的表必然是这个形状；
      * 一张画到页面中部就结束的表说明它是完整的，不再往下并。
      *
-     * <p>跨三页以上的长表靠「并完一截就把 {@code previous} 的页码和下边界换成后一截的」继续往下接：
-     * {@code continues} 要求页码相邻，{@code previous} 若一直停在第一截，第三页就跟它比不上了
-     * （实测三页长表会剩两截：第 1+2 页并成一张、第 3 页另起一张，静默选项下第 3 页那截的首行还会被当成表头）。
+     * <p>跨三页以上的长表靠「并完一截就把 {@code previous} 的页码、下边界和『是否为本页最后一块』
+     * 换成后一截的」继续往下接：{@code continues} 要求页码相邻、上一截是原页的最后一块内容，
+     * {@code previous} 若一直停在第一截，第三页就跟它比不上了；漏换 {@code lastOnPage} 还会让
+     * 中间那页片段后面跟了图片（或别的内容）时，第三页的独立表被错并进来。一条占满三页的长表实测能并成
+     * 一组（89 行数据、{@code source={page:1, lastPage:3}}，静默与注册两种模式结果完全相同），见
+     * {@code PdfCrossPageTableTest}。<i>前提是每一页上这一段都是那一页的最后一块内容</i> —— 中间那页的
+     * 表格片段后面还有别的内容（另一张表或图片）时链条会断在那儿：第 1+2 页并成一张、第 3 页另起一张。
+     * 同一份测试里的 {@code theChainStopsAtAPageThatHasSomethingElseAfterTheFragment}（后面跟另一张表）与
+     * {@code theChainAlsoStopsWhenANonTableFlowFollowsTheFragment}（后面跟一张图）把这两种情况都钉住了：
+     * 断掉不是 bug，那正是「前一截没贴着页底就不该往下并」这条判据换来的安全性。
      * 左边界不跟着换：始终与第一截比，免得每页 {@value #TOLERANCE}pt 的容差一页页累积成漂移。
      */
     private static void mergeSplitTables(List<Flow> flows, WordParser.Options options) {
@@ -310,9 +442,12 @@ public final class PdfParser {
             }
             if (previous != null && continues(previous, flow, options)) {
                 previous.grid = previous.grid.concat(flow.grid);
-                // 并进来的这一截成了新的「尾巴」：三页以上的长表还要继续跟下一页比，页码和离页底的距离都得用它的
+                // 并进来的这一截成了新的「尾巴」：三页以上的长表还要继续跟下一页比，页码、离页底的距离
+                // 和「是不是本页最后一块」都得用它的。漏掉 lastOnPage 的话，这一页片段后面跟了正文时，
+                // previous 还停在第一页的 true 上，下一页的独立表会被错并进来
                 previous.page = flow.page;
                 previous.bottomGap = flow.bottomGap;
+                previous.lastOnPage = flow.lastOnPage;
                 flow.grid = null;
             } else {
                 previous = flow;
@@ -336,7 +471,9 @@ public final class PdfParser {
         return !options.isSilent() || (previous.bottomGap <= PAGE_EDGE_REACH && next.topGap <= PAGE_EDGE_REACH);
     }
 
-    /** 这一截表里有没有能当表头的行 —— 有表头说明是新的一张表，不该并到上一页的表里。 */
+    /**
+     * 这一截表里有没有能当表头的行 —— 有表头说明是新的一张表，不该并到上一页的表里。
+     */
     private static boolean hasHeaderCandidate(Grid grid, WordParser.Options options) {
         for (int r = 0; r < grid.rowCount; r++) {
             if (grid.separator[r]) {
@@ -389,7 +526,9 @@ public final class PdfParser {
         return groups;
     }
 
-    /** 两个表格矩形在横向和纵向上都挨着（允许 {@value #TOLERANCE}pt 的缝隙）即认为属于同一张表。 */
+    /**
+     * 两个表格矩形在横向和纵向上都挨着（允许 {@value #TOLERANCE}pt 的缝隙）即认为属于同一张表。
+     */
     private static boolean adjacent(Rectangle a, Rectangle b) {
         if (a == null || b == null) {
             return false;
@@ -509,7 +648,49 @@ public final class PdfParser {
         return new Grid(values, separator, columnCount, cells);
     }
 
-    /** 单元格文本：文字片段按顺序拼接，再统一清洗空白与控制字符，评估水印整段直接当成空。 */
+    /**
+     * 流式引擎那张表直接按「行列表 × 每行格子数」落格，不做矩形聚类。
+     *
+     * <p>为什么不复用 {@link #toGrid}：流式引擎给的单元格矩形是<b>文字的外接框</b>，不是格子自己的面积，
+     * 同一列各行的左右边界对不齐，聚类会凭空多出列线。实测一张 5 行×3 列的无边框表走 {@code toGrid}
+     * 出来是 4 行×5 列（列名 {@code [NBR0C0, 列2, NBR0C1, 列4, NBR0C2]}，第一二行还被并成一行）；
+     * 按行列表直接落格才是 5 行×3 列。
+     * 线段引擎必须聚类是因为一张表常被切成多块、各块列数对不上；流式引擎整表一次给出，没有这个问题。
+     *
+     * <p>横向合并的格子在这一行里只占一个位置，直接落格会让后面的列整体左移 —— 这种行格数不齐的表
+     * 已经被 {@link #flowOnlyTables} 的「每行格数一致」挡在外面，这里不再特殊处理。
+     */
+    private static Grid flowGrid(AbsorbedTable table) {
+        List<AbsorbedRow> rows = table.getRowList();
+        int columnCount = 0;
+        for (AbsorbedRow row : rows) {
+            columnCount = Math.max(columnCount, row.getCellList().size());
+        }
+        String[][] values = new String[rows.size()][columnCount];
+        boolean[] separator = new boolean[rows.size()];
+        List<Rectangle> bounds = new ArrayList<Rectangle>();
+        // 与 toGrid「没有任何有效单元格就返回 null」对应的退出条件
+        if (columnCount == 0) {
+            return null;
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            List<AbsorbedCell> cells = rows.get(r).getCellList();
+            Arrays.fill(values[r], "");
+            for (int c = 0; c < cells.size(); c++) {
+                values[r][c] = cellText(cells.get(c));
+                if (cells.get(c).getRectangle() != null) {
+                    bounds.add(cells.get(c).getRectangle());
+                }
+            }
+            // 整行只有一个格子、又不是空行 —— 跨整行的合并行（小标题、分组行）
+            separator[r] = columnCount > 1 && cells.size() == 1 && values[r][0].length() > 0;
+        }
+        return new Grid(values, separator, columnCount, bounds);
+    }
+
+    /**
+     * 单元格文本：文字片段按顺序拼接，再统一清洗空白与控制字符，评估水印整段直接当成空。
+     */
     private static String cellText(AbsorbedCell cell) {
         StringBuilder sb = new StringBuilder();
         for (TextFragment fragment : cell.getTextFragments()) {
@@ -518,7 +699,9 @@ public final class PdfParser {
         return Results.cleanContent(sb.toString());
     }
 
-    /** 边界聚类：排序后把相差不到 {@value #TOLERANCE}pt 的坐标并成一条线。 */
+    /**
+     * 边界聚类：排序后把相差不到 {@value #TOLERANCE}pt 的坐标并成一条线。
+     */
     private static double[] clusterEdges(List<Double> values) {
         double[] sorted = new double[values.size()];
         for (int i = 0; i < sorted.length; i++) {
@@ -542,7 +725,9 @@ public final class PdfParser {
         return edges;
     }
 
-    /** 找出与该坐标最接近的边界下标。 */
+    /**
+     * 找出与该坐标最接近的边界下标。
+     */
     private static int edgeIndex(double[] edges, double value) {
         int best = 0;
         double bestDiff = Math.abs(edges[0] - value);
@@ -577,7 +762,9 @@ public final class PdfParser {
             this.bounds = bounds;
         }
 
-        /** 接到另一张表后面：PDF 的表格按页断开，但分组要在整张表上做一次，所以先并行拼接再分组。 */
+        /**
+         * 接到另一张表后面：PDF 的表格按页断开，但分组要在整张表上做一次，所以先并行拼接再分组。
+         */
         Grid concat(Grid other) {
             String[][] rows = new String[rowCount + other.rowCount][];
             boolean[] merged = new boolean[rowCount + other.rowCount];
@@ -595,6 +782,8 @@ public final class PdfParser {
 
     /**
      * 按段落读出正文，跳过表格区域内的段落（表格文字只进 {@code tables}）和 Aspose 的评估水印。
+     * 这里的「表格区域」对两种来源不是一样大的：线段引擎给的是边框围出来的矩形，流式引擎补读的那张表给的是
+     * <b>格子矩形</b>而不是它的整表外接矩形，原因见 {@link #flowTableFlow}。
      *
      * <h3>解析过程</h3>
      * {@link ParagraphAbsorber} 把一页切成 {@link PageMarkup}，每个 markup 再切成节、节切成分段；
@@ -639,7 +828,9 @@ public final class PdfParser {
         return flows;
     }
 
-    /** 段落的位置 = 它所有文字片段矩形的并集。 */
+    /**
+     * 段落的位置 = 它所有文字片段矩形的并集。
+     */
     private static Rectangle bounds(MarkupParagraph paragraph) {
         double llx = Double.MAX_VALUE;
         double lly = Double.MAX_VALUE;
@@ -658,7 +849,9 @@ public final class PdfParser {
         return urx <= llx || ury <= lly ? null : new Rectangle(llx, lly, urx, ury);
     }
 
-    /** 段落中心点落在任一表格矩形内即认为属于表格。 */
+    /**
+     * 段落中心点落在任一表格矩形内即认为属于表格。
+     */
     private static boolean inAny(Rectangle rect, List<Rectangle> tableRects) {
         double centerX = (rect.getLLX() + rect.getURX()) / 2;
         double centerY = (rect.getLLY() + rect.getURY()) / 2;
@@ -671,7 +864,9 @@ public final class PdfParser {
         return false;
     }
 
-    /** 一组矩形里最靠下的上边界，用作表格在页面上的纵向位置（PDF 的 y 轴朝上，越大越靠上）。 */
+    /**
+     * 一组矩形里最靠下的上边界，用作表格在页面上的纵向位置（PDF 的 y 轴朝上，越大越靠上）。
+     */
     private static double maxURY(List<Rectangle> rects) {
         double max = -Double.MAX_VALUE;
         for (Rectangle rect : rects) {
@@ -680,7 +875,9 @@ public final class PdfParser {
         return max;
     }
 
-    /** 一组矩形里最左的左边界；{@link #continues} 用它判断跨页的两截是不是同一条竖线对齐。 */
+    /**
+     * 一组矩形里最左的左边界；{@link #continues} 用它判断跨页的两截是不是同一条竖线对齐。
+     */
     private static double minLLX(List<Rectangle> rects) {
         double min = Double.MAX_VALUE;
         for (Rectangle rect : rects) {
@@ -689,7 +886,9 @@ public final class PdfParser {
         return min;
     }
 
-    /** 一组矩形里最靠下的下边界，即这张表在页面上画到的最低位置。 */
+    /**
+     * 一组矩形里最靠下的下边界，即这张表在页面上画到的最低位置。
+     */
     private static double minLLY(List<Rectangle> rects) {
         double min = Double.MAX_VALUE;
         for (Rectangle rect : rects) {
@@ -745,12 +944,16 @@ public final class PdfParser {
 
     /* ---------------- 输出 ---------------- */
 
-    /** 序列化成缩进 JSON，同 {@link WordParser#toJson(Object)}。 */
+    /**
+     * 序列化成缩进 JSON，同 {@link WordParser#toJson(Object)}。
+     */
     public static String toJson(Object value) throws Exception {
         return Results.toJson(value);
     }
 
-    /** 把 {@link WordParser.ImageMode#BASE64} 结果里的图片落成文件，同 {@link WordParser#writeImages}。 */
+    /**
+     * 把 {@link WordParser.ImageMode#BASE64} 结果里的图片落成文件，同 {@link WordParser#writeImages}。
+     */
     public static void writeImages(Map<String, Object> result, File directory) throws Exception {
         Results.writeImages(result, directory);
     }
@@ -765,7 +968,9 @@ public final class PdfParser {
 
     /* ---------------- 通用 ---------------- */
 
-    /** classpath 或当前目录存在 aspose-pdf.lic 时自动注册（一个进程只需一次），避免评估模式的文字截断和水印。 */
+    /**
+     * classpath 或当前目录存在 aspose-pdf.lic 时自动注册（一个进程只需一次），避免评估模式的文字截断和水印。
+     */
     private static void applyLicenseIfPresent() {
         Results.applyLicense("aspose-pdf", "/aspose-pdf.lic", "aspose-pdf.lic",
                 stream -> new License().setLicense(stream));
@@ -782,7 +987,9 @@ public final class PdfParser {
         return new Document(filePath);
     }
 
-    /** 同上，从输入流加载；{@link #parse} 会负责 {@code close}，传入的流本身由调用方关闭。 */
+    /**
+     * 同上，从输入流加载；{@link #parse} 会负责 {@code close}，传入的流本身由调用方关闭。
+     */
     private static Document open(InputStream inputStream) throws Exception {
         applyLicenseIfPresent();
         return new Document(inputStream);
@@ -800,6 +1007,10 @@ public final class PdfParser {
      */
     private static final class Flow {
         int page;
+        /**
+         * 起始页：跨页并起来之后 {@code page} 会变成最后一截的页码，回原文定位要靠这个。
+         */
+        int startPage;
         double top;
         double left;
         /**
@@ -808,7 +1019,9 @@ public final class PdfParser {
          */
         double topGap;
         double bottomGap;
-        /** 这一段是不是它那一页的最上面一段 / 最下面一段，跨页续接判断用（见 {@link #mergeSplitTables}）。 */
+        /**
+         * 这一段是不是它那一页的最上面一段 / 最下面一段，跨页续接判断用（见 {@link #mergeSplitTables}）。
+         */
         boolean firstOnPage;
         boolean lastOnPage;
         Grid grid;
@@ -816,7 +1029,9 @@ public final class PdfParser {
         PendingImage image;
     }
 
-    /** 图片先攒着，等内容排好序再交给 {@link Images} 记录，编号顺序才和文档里看到的先后一致。 */
+    /**
+     * 图片先攒着，等内容排好序再交给 {@link Images} 记录，编号顺序才和文档里看到的先后一致。
+     */
     private static final class PendingImage {
         private final String type;
         private final int width;

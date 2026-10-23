@@ -1,34 +1,11 @@
 package cn.net.tianxi.document;
 
-import com.aspose.words.Cell;
-import com.aspose.words.CellCollection;
-import com.aspose.words.CellFormat;
-import com.aspose.words.CellMerge;
-import com.aspose.words.CompositeNode;
-import com.aspose.words.Document;
-import com.aspose.words.ImageData;
-import com.aspose.words.ImageSize;
-import com.aspose.words.ImageType;
-import com.aspose.words.License;
-import com.aspose.words.Node;
-import com.aspose.words.NodeCollection;
-import com.aspose.words.NodeType;
-import com.aspose.words.Paragraph;
-import com.aspose.words.Row;
-import com.aspose.words.RowCollection;
-import com.aspose.words.Shape;
-import com.aspose.words.Table;
-import com.aspose.words.TableStyleOptions;
+import com.aspose.words.*;
 
 import java.io.File;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * word 解析工具类（doc / docx）：一次调用返回三个集合 —— 文本、表格集合、图片集合。
@@ -50,17 +27,30 @@ import java.util.Set;
  *   "tables": [
  *     { "headers": ["片区","区域","销售额","回款率","销售额-5","回款率-6","备注"],
  *       "rows": [ {"片区":"华东大区","区域":"上海","销售额":"1280","回款率":"92%",
- *                  "销售额-5":"1465","回款率-6":"95%","备注":"超额完成"} ] }
+ *                  "销售额-5":"1465","回款率-6":"95%","备注":"超额完成"} ],
+ *       "name": "季度明细",                     // 注册时 Options.name(...) 起过名字才有这一行
+ *       "source": {"page":1} }
  *   ],
  *   "images": [ {"fileName":"image-1.png","type":"PNG","width":1024,"height":768,
- *               "size":670939,"contentId":"487e915db2c53907e8c1551aeaffea235423210c"} ]
+ *               "size":670939,"contentId":"487e915db2c53907e8c1551aeaffea235423210c"} ],
+ *   "unmatchedHeaders": [ {"headers":["故障部件","工单数"]} ]  // Options.unmatchedHeaders(true) 才有这一行
  * }
  * </pre>
  *
  * <p>样例实测：{@code text} 是 13 段正文（最长那段 62 个字符，完整读出，评估模式没截 Words 的正文），
- * {@code tables} 7 个表头组共 30 行，{@code images} 1 张。默认（{@link ImageMode#META}）整串 JSON 4409 个字符；
- * 换 {@link ImageMode#BASE64} 变成 899039 个字符 —— 那张 670939 字节的 PNG 编码后占 894610 个字符。
+ * {@code tables} 7 个表头组共 30 行，{@code images} 1 张。默认（{@link ImageMode#META}）整串 JSON 4740 个字符；
+ * 换 {@link ImageMode#BASE64} 变成 899370 个字符 —— 那张 670939 字节的 PNG 编码后占 894610 个字符。
  * {@code FILE} 模式多一个 {@code "path"}，{@code BYTES} 多一个 {@code "bytes"}。
+ * 每组都带 {@code source}（起始页，跨页的台账另带 {@code lastPage}），见 {@link Tables#markSource}；
+ * 这份页码要问版面，不想要就 {@code Options.source(false)}（见该方法的实测耗时）。
+ * {@code name} 只在注册表头时用 {@link Options#name(String)} 起过名字、且这一行确实命中那组注册表头才写，
+ * 所以默认输出里没有它（实测：注册五组不起名仍是 4740 个字符；给其中三组起名后有<b>四</b>组带上了这个键
+ * —— {@code 年度目标} 命中两组 —— 4828 个字符，每组多 22 个字符）；
+ * 起了名字的组可以用 {@link #tablesByName(Map, String)}／{@link #rowsByName(Map, String)}
+ * 按名字直接取，不必记住第几组。四个键的先后固定是 {@code headers} → {@code rows} → {@code name} → {@code source}。
+ * 顶层键默认只有 {@code text}／{@code tables}／{@code images} 三个，打开
+ * {@link Options#unmatchedHeaders(boolean)} 才多一个 {@code unmatchedHeaders}（注册了却一组都没命中的表头集合，
+ * 与标准错误那条提示同一份规则），默认关是为了不给下游添未知键。
  * <i>（测试：{@code WordParserTest}）</i>
  *
  * <h2>表格：一个表头对应它下面的行</h2>
@@ -126,9 +116,11 @@ import java.util.Set;
  * <h2>评估模式与深度上限</h2>
  * 没有 {@code aspose-words.lic} 时 Aspose.Words 会往页眉页脚注入水印段落：本类只走 Body，
  * 加上 {@link Results#cleanContent} 过滤，样例的 13 段正文里没有一句水印。递归深度都有上限，
- * 超过就跳过那一支并在标准错误提示，避免畸形文件把栈撑爆：表格嵌套
- * {@value #MAX_NESTED_TABLE_DEPTH} 层、Body 之下容器节点 {@value #MAX_CONTAINER_DEPTH} 层
- * （实测 12 层嵌套表触发 {@code 表格嵌套超过}、20 层嵌套控件触发 {@code 节点嵌套超过}，外层照常解析）。
+ * 超过就跳过那一支并在标准错误提示一次，避免畸形文件把栈撑爆：表格最多读
+ * {@value #MAX_NESTED_TABLE_DEPTH} 层（第 9 层起跳过）、Body 之下容器节点最多钻
+ * {@value #MAX_CONTAINER_DEPTH} 层。提示只在真要跳内容时出现：恰好 8 层的表读全 8 组、标准错误为空，
+ * 第 9 层才提示一次；实测 12 层嵌套表触发 {@code 表格嵌套超过}、20 层嵌套控件触发 {@code 节点嵌套超过}，
+ * 外层都照常解析。
  *
  * <p>{@link PdfParser} 与 {@link PptParser} 复用本类的 {@link Options}、分组算法和输出结构，
  * 三种格式的返回结果形状完全一致；同一份报告的核心表在三种格式下逐格相同
@@ -139,10 +131,14 @@ import java.util.Set;
  */
 public final class WordParser {
 
-    /** 表格嵌套解析的最深层数：正常文件一两层，深到这个数以上的多半是畸形文件。 */
+    /**
+     * 表格嵌套解析的最深层数：正常文件一两层，深到这个数以上的多半是畸形文件。
+     */
     private static final int MAX_NESTED_TABLE_DEPTH = 8;
 
-    /** Body 之下容器节点（内容控件一类）最多钻的层数，超过就跳过这一支，避免把栈撑爆。 */
+    /**
+     * Body 之下容器节点（内容控件一类）最多钻的层数，超过就跳过这一支，避免把栈撑爆。
+     */
     private static final int MAX_CONTAINER_DEPTH = 16;
 
     private WordParser() {
@@ -165,7 +161,9 @@ public final class WordParser {
         return parse(open(filePath), options().keywords(headerKeywords));
     }
 
-    /** 从输入流解析，语义同 {@link #parse(String, String...)}。 */
+    /**
+     * 从输入流解析，语义同 {@link #parse(String, String...)}。
+     */
     public static Map<String, Object> parse(InputStream inputStream, String... headerKeywords) throws Exception {
         return parse(open(inputStream), options().keywords(headerKeywords));
     }
@@ -191,12 +189,16 @@ public final class WordParser {
         return parse(open(filePath), options);
     }
 
-    /** 从输入流按选项解析，语义同 {@link #parse(String, Options)}；流由调用方关闭。 */
+    /**
+     * 从输入流按选项解析，语义同 {@link #parse(String, Options)}；流由调用方关闭。
+     */
     public static Map<String, Object> parse(InputStream inputStream, Options options) throws Exception {
         return parse(open(inputStream), options);
     }
 
-    /** 新建一份选项。 */
+    /**
+     * 新建一份选项。
+     */
     public static Options options() {
         return new Options();
     }
@@ -215,7 +217,7 @@ public final class WordParser {
      * 否则这次解析仍是评估模式。页眉页脚不在走到的范围内 —— 它们是版式附属内容，而且评估水印就注入在那里。
      */
     private static Map<String, Object> parse(Document document, Options options) throws Exception {
-        Content content = new Content(options);
+        Content content = new Content(options, document);
 
         for (int s = 0; s < document.getSections().getCount(); s++) {
             CompositeNode<?> body = document.getSections().get(s).getBody();
@@ -223,12 +225,16 @@ public final class WordParser {
                 walk(node, content, 0);
             }
         }
-        warnUnmatchedHeaders(options, content.matchedGroups);
+        List<Map<String, Object>> unmatched =
+                Tables.warnUnmatchedHeaders("[WordParser] ", options, content.matchedGroups);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("text", Results.join(content.paragraphs, "\n"));
         result.put("tables", content.tables);
         result.put("images", content.images.list());
+        if (options.writesUnmatchedHeaders()) {
+            result.put("unmatchedHeaders", unmatched);
+        }
         return result;
     }
 
@@ -258,50 +264,67 @@ public final class WordParser {
             return;
         }
         if (node.getNodeType() == NodeType.TABLE) {
-            content.tables.addAll(parseTable((Table) node, content.options, content.matchedGroups,
-                    content.images, 0));
+            content.tables.addAll(parseTable((Table) node, content, 0));
             return;
         }
         if (node.getNodeType() == NodeType.SHAPE && ((Shape) node).hasImage()) {
             addImage(content.images, (Shape) node);
+        }
+        // 叶子节点没有子节点可钻，深度再大也不会继续递归；先判 isComposite 再判深度，
+        // 免得深层但无内容的书签类节点被误报成「节点嵌套超过」
+        if (!node.isComposite()) {
+            return;
         }
         if (depth >= MAX_CONTAINER_DEPTH) {
             System.err.println("[WordParser] 节点嵌套超过 " + MAX_CONTAINER_DEPTH + " 层，该分支已跳过："
                     + NodeType.getName(node.getNodeType()));
             return;
         }
-        if (node.isComposite()) {
-            CompositeNode<?> composite = (CompositeNode<?>) node;
-            for (Node child = composite.getFirstChild(); child != null; child = child.getNextSibling()) {
-                walk(child, content, depth + 1);
-            }
-        }
-    }
-
-    /** 一次解析的过程状态：三个集合加上表头命中之类需要跨节点积累的账。 */
-    private static final class Content {
-        final List<String> paragraphs = new ArrayList<String>();
-        final List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
-        final Images images;
-        /** 实际命中过的表头集合下标，用来提示「注册了却没匹配上」。 */
-        final Set<Integer> matchedGroups = new LinkedHashSet<Integer>();
-        final Options options;
-
-        Content(Options options) {
-            this.options = options;
-            this.images = new Images(options);
+        CompositeNode<?> composite = (CompositeNode<?>) node;
+        for (Node child = composite.getFirstChild(); child != null; child = child.getNextSibling()) {
+            walk(child, content, depth + 1);
         }
     }
 
     /**
-     * 注册了却一行都没匹配上的表头集合，说明表头文本与文档不一致（错字、少列、多空格之外的差异）。
-     * 这类问题会让后面的数据行整段并进上一组表头，只从结果里很难看出来，所以直接提示到标准错误输出。
+     * 一次解析的过程状态：三个集合加上表头命中之类需要跨节点积累的账。
      */
-    private static void warnUnmatchedHeaders(Options options, Set<Integer> matchedGroups) {
-        for (int i = 0; i < options.headerGroupCount(); i++) {
-            if (!matchedGroups.contains(i)) {
-                System.err.println("[WordParser] 表头集合未匹配到任何行：" + options.headerGroup(i));
+    private static final class Content {
+        final List<String> paragraphs = new ArrayList<String>();
+        final List<Map<String, Object>> tables = new ArrayList<Map<String, Object>>();
+        final Images images;
+        /**
+         * 实际命中过的表头集合下标，用来提示「注册了却没匹配上」。
+         */
+        final Set<Integer> matchedGroups = new LinkedHashSet<Integer>();
+        final Options options;
+        final Document document;
+        /**
+         * 版面信息，第一次遇到表格才建 —— 没有表格的文件不用付这份开销。
+         */
+        private LayoutCollector pages;
+
+        Content(Options options, Document document) {
+            this.options = options;
+            this.document = document;
+            this.images = new Images(options);
+        }
+
+        /**
+         * 给这张表切出的各个表头组补来源页。
+         *
+         * <p>实测（{@code sales-report.docx}）：不先调 {@code updatePageLayout()}，{@code LayoutCollector}
+         * 给的起止页和刷过版面之后<b>完全一样</b>（5 张表 1-1／1-2／2-2／2-2／2-2），而刷版面本身要 197ms
+         * （JDK 21、无 lic），所以这里直接用打开时的版面。跨页的台账因此带上 {@code lastPage=2}。
+         */
+        void markSource(List<Map<String, Object>> groups, Table table) throws Exception {
+            if (!options.writesSource()) {
+                return;                     // 关开关就是连版面都不算：LayoutCollector 一次都不创建
             }
+            if (pages == null) {
+                pages = new LayoutCollector(document);
+            }
+            Tables.markSource(groups, pages.getStartPageIndex(table), pages.getEndPageIndex(table));
         }
     }
 
@@ -329,8 +352,10 @@ public final class WordParser {
      * 内部递归入口是 {@code depth}，外层调用请传 0；嵌套深度超过 {@value #MAX_NESTED_TABLE_DEPTH} 层会跳过并提示，
      * 免得畸形文件把栈撑爆。图片统一进同一个 {@link Images}，所以编号仍按文档流顺序。
      */
-    private static List<Map<String, Object>> parseTable(Table table, Options options, Set<Integer> matchedGroups,
-                                                         Images images, int depth) throws Exception {
+    private static List<Map<String, Object>> parseTable(Table table, Content content, int depth) throws Exception {
+        Options options = content.options;
+        Set<Integer> matchedGroups = content.matchedGroups;
+        Images images = content.images;
         table.convertToHorizontallyMergedCells();
 
         RowCollection rowNodes = table.getRows();
@@ -360,19 +385,21 @@ public final class WordParser {
         List<Map<String, Object>> groups =
                 new ArrayList<Map<String, Object>>(Tables.group(rows, separator, heading, options, matchedGroups,
                         firstRowStyled));
-        groups.addAll(parseNestedTables(rowNodes, options, matchedGroups, images, depth));
+        // 来源页先按本表标定，再解析嵌套表 —— 子表在自己的递归里标自己的页
+        content.markSource(groups, table);
+        groups.addAll(parseNestedTables(rowNodes, content, depth));
         return groups;
     }
 
-    /** 本表各单元格里直接挂着的嵌套表，逐张递归解析；超过深度上限的跳过并提示。 */
-    private static List<Map<String, Object>> parseNestedTables(RowCollection rowNodes, Options options,
-                                                              Set<Integer> matchedGroups, Images images, int depth)
+    /**
+     * 本表各单元格里直接挂着的嵌套表，逐张递归解析；超过深度上限的跳过并提示。
+     */
+    private static List<Map<String, Object>> parseNestedTables(RowCollection rowNodes, Content content, int depth)
             throws Exception {
         List<Map<String, Object>> nested = new ArrayList<Map<String, Object>>();
-        if (depth >= MAX_NESTED_TABLE_DEPTH) {
-            System.err.println("[WordParser] 表格嵌套超过 " + MAX_NESTED_TABLE_DEPTH + " 层，更里面的内容已跳过");
-            return nested;
-        }
+        // 本表是第 depth + 1 层；子表会是第 depth + 2 层，超过上限就只提示、不往下读。
+        // 提示必须等到真有一个子表再打：到了上限但没有子表的表是正常结束，不该报「已跳过」
+        boolean warned = false;
         for (int r = 0; r < rowNodes.getCount(); r++) {
             CellCollection cells = rowNodes.get(r).getCells();
             for (int c = 0; c < cells.getCount(); c++) {
@@ -383,7 +410,15 @@ public final class WordParser {
                 // 只取直接子表：更深的层次由下一次递归负责，避免同一张表读两遍
                 NodeCollection<?> tables = cell.getChildNodes(NodeType.TABLE, false);
                 for (int i = 0; i < tables.getCount(); i++) {
-                    nested.addAll(parseTable((Table) tables.get(i), options, matchedGroups, images, depth + 1));
+                    if (depth + 1 >= MAX_NESTED_TABLE_DEPTH) {
+                        if (!warned) {
+                            System.err.println("[WordParser] 表格嵌套超过 " + MAX_NESTED_TABLE_DEPTH
+                                    + " 层，更里面的内容已跳过");
+                            warned = true;
+                        }
+                        continue;
+                    }
+                    nested.addAll(parseTable((Table) tables.get(i), content, depth + 1));
                 }
             }
         }
@@ -409,11 +444,17 @@ public final class WordParser {
      * 所以分组行之后直接放数据行会多切出一组。
      */
     public enum FullRow {
-        /** 保留，归到它上面最近的表头组（默认）。 */
+        /**
+         * 保留，归到它上面最近的表头组（默认）。
+         */
         KEEP,
-        /** 保留，统一归到同一张物理表的第一个表头组。 */
+        /**
+         * 保留，统一归到同一张物理表的第一个表头组。
+         */
         FIRST,
-        /** 直接丢弃。 */
+        /**
+         * 直接丢弃。
+         */
         DROP
     }
 
@@ -425,8 +466,8 @@ public final class WordParser {
      * 任何模式下都会给。
      *
      * <p>样例上的实测差距：{@code sales-report.docx} 只有一张 670939 字节的 PNG，{@code META} 整串 JSON
-     * 4409 个字符，{@code BASE64} 899039 个字符（那段 data URI 本身 894610 个字符，占 99.5%）；
-     * 同一张图在 PDF 样例里被 Word 重编成 38668 字节的 JPEG，{@code META} 6186 → {@code BASE64} 57789 个字符。
+     * 4740 个字符，{@code BASE64} 899370 个字符（那段 data URI 本身 894610 个字符，占 99.5%）；
+     * 同一张图在 PDF 样例里被 Word 重编成 38668 字节的 JPEG，{@code META} 6473 → {@code BASE64} 58076 个字符。
      *
      * <p>内存上的差别：{@code BASE64}/{@code BYTES} 会把整篇文档的图片字节都留在结果里，图片多的文档请选
      * {@code FILE}（边解析边落盘，结果里只有路径）或 {@code META}。
@@ -435,13 +476,21 @@ public final class WordParser {
      * 要把图片直接塞进 {@code <img src>} 时才显式选 {@code BASE64}，要转存或送 OCR 选 {@code FILE}/{@code BYTES}。
      */
     public enum ImageMode {
-        /** 结果里放 {@code data:image/png;base64,...}，前端可以直接塞进 {@code <img src>}；体积最大，要显式选。 */
+        /**
+         * 结果里放 {@code data:image/png;base64,...}，前端可以直接塞进 {@code <img src>}；体积最大，要显式选。
+         */
         BASE64,
-        /** 解析时直接把图片写进 {@link Options#imageDir(File)}，结果里只留 {@code fileName}/{@code path}。 */
+        /**
+         * 解析时直接把图片写进 {@link Options#imageDir(File)}，结果里只留 {@code fileName}/{@code path}。
+         */
         FILE,
-        /** 结果里放原始 {@code byte[]}（Jackson 会编成不带 data: 前缀的 base64），适合 Java 侧转存或送 OCR。 */
+        /**
+         * 结果里放原始 {@code byte[]}（Jackson 会编成不带 data: 前缀的 base64），适合 Java 侧转存或送 OCR。
+         */
         BYTES,
-        /** 只要元信息、不导出内容（默认）：只关心文字和表格时最省。 */
+        /**
+         * 只要元信息、不导出内容（默认）：只关心文字和表格时最省。
+         */
         META
     }
 
@@ -461,6 +510,9 @@ public final class WordParser {
      *           pptx 变成 6 组／21 行（下层表头行不再被当成数据）</td></tr>
      *   <tr><td>{@link #headerTolerance(int)}</td><td>1</td>
      *       <td>表头比对允许几列不一致；0 表示逐列相等。无论取值多少都至少要求一列完全相等且列数相同</td></tr>
+     *   <tr><td>{@link #name(String)}</td><td>不起名</td>
+     *       <td>给最近一次注册的那一组起名，命中才写 {@code name} 键；不起名时结果与静默模式逐字节相同。
+     *           起过名字后就能用 {@link #tablesByName(Map, String)}／{@link #rowsByName(Map, String)} 按名字取组取行</td></tr>
      *   <tr><td>{@link #keywords(String...)}</td><td>不给</td>
      *       <td>宽松兜底：行内每个非空单元格都含关键字之一才算表头</td></tr>
      *   <tr><td>{@link #fullRow(cn.net.tianxi.document.WordParser.FullRow) fullRow(FullRow)}</td>
@@ -468,10 +520,16 @@ public final class WordParser {
      *       <td>见 {@link FullRow}：docx 上 KEEP 7 组／30 行、FIRST 同数量只改归属、DROP 6 组／28 行</td></tr>
      *   <tr><td>{@link #images(cn.net.tianxi.document.WordParser.ImageMode) images(ImageMode)}</td>
      *       <td>{@link ImageMode#META}</td>
-     *       <td>见 {@link ImageMode}：docx 上 META 4409 字符、BASE64 899039 字符</td></tr>
+     *       <td>见 {@link ImageMode}：docx 上 META 4740 字符、BASE64 899370 字符</td></tr>
      *   <tr><td>{@link #imageDir(File)}</td><td>null</td>
      *       <td>只在 {@code FILE} 模式下生效；{@code FILE} 没配它会在解析到第一张图时抛
      *           {@code IllegalStateException}，配了却不是 {@code FILE} 会在标准错误提示</td></tr>
+     *   <tr><td>{@link #source(boolean)}</td><td>{@code true}</td>
+     *       <td>每组表带不带 {@code source}（起始页／幻灯片序号），三种格式一起生效。
+     *           docx 关掉它就不付版面构建：同一份样例开／关交替实测 74–254ms（开）对 11–35ms（关）</td></tr>
+     *   <tr><td>{@link #unmatchedHeaders(boolean)}</td><td>{@code false}</td>
+     *       <td>打开后结果多一个顶层键 {@code unmatchedHeaders}，列出注册了却一组都没命中的表头集合
+     *           （与标准错误那条提示同一份规则）。默认关，关掉时输出逐字节不变</td></tr>
      * </table>
      *
      * <p>可变对象，链式调用即改即生效；没有做同步，配置期间别跨线程共享。配置好后并发用于多次解析是可以的
@@ -480,13 +538,21 @@ public final class WordParser {
      */
     public static final class Options {
         private final List<List<String>> headerGroups = new ArrayList<List<String>>();
-        /** 与 {@code headerGroups} 一一对应的原名，比对用小写去空格，输出列名用这一份。 */
+        /**
+         * 与 {@code headerGroups} 一一对应的原名，比对用小写去空格，输出列名用这一份。
+         */
         private final List<List<String>> headerGroupNames = new ArrayList<List<String>>();
+        /**
+         * 与 {@code headerGroups} 一一对应的组名，由 {@link #name(String)} 写在最近一次注册的那一组上；没起名就是空串。
+         */
+        private final List<String> headerLabels = new ArrayList<String>();
         private final List<String> keywords = new ArrayList<String>();
         private FullRow fullRow = FullRow.KEEP;
         private int headerTolerance = 1;
         private ImageMode imageMode = ImageMode.META;
         private File imageDir;
+        private boolean source = true;
+        private boolean unmatchedHeaders;
 
         /**
          * 注册一组完整表头，行文本与之逐项相等（忽略大小写与空格）即判定为表头；可多次调用注册多组。
@@ -510,14 +576,81 @@ public final class WordParser {
             }
             headerGroups.add(group);
             headerGroupNames.add(names);
+            headerLabels.add("");
             return this;
         }
 
-        /** 注册多组完整表头。 */
+        /**
+         * 注册多组完整表头。
+         */
         public Options headerGroups(List<List<String>> groups) {
             for (List<String> group : groups) {
                 headers(group.toArray(new String[group.size()]));
             }
+            return this;
+        }
+
+        /**
+         * 给<b>最近一次 {@link #headers(String...)} 注册的那一组</b>起一个名字，命中之后写进结果的 {@code name} 键。
+         *
+         * <h3>用意</h3>
+         * <p>一份报告里十几张表，通常只有几张要入库。用法是先跑一次 {@code PrintResultTest}（或 {@code -Ddoc}
+         * 指自己的文档）看每组打印出来的 {@code headers}，挑出要入库的那几组，把它们的列名注册进来并顺手起个名字：
+         * <pre>
+         * WordParser.options()
+         *     .headers("片区", "年度目标", "完成率").name("年度目标")
+         *     .headers("客户名称", "合同金额", "已回款", "回款率", "备注").name("回款台账")
+         *     .headers("工单类型", "工单数", "处理说明");           // 不入库的表不起名字，结果里就没有 name 键
+         * </pre>
+         * 之后取行不必再按下标猜第几组：{@link WordParser#tablesByName(Map, String)} 与
+         * {@link WordParser#rowsByName(Map, String)} 按名字直接拿，三种格式的结果共用同一份名字。
+         *
+         * <h4>注意事项</h4>
+         * <ul>
+         *   <li><b>顺序有关</b>：{@code name} 绑定在它<b>前面</b>最近一次 {@code headers} 注册的那一组，
+         *       连写两次以后者为准；用 {@link #headerGroups(List)} 批量注册时，它绑定的是<b>那一批的最后一组</b>
+         *       （批量注册等价于按顺序逐组 {@code headers}），要给多组起名就改用 {@code headers(...).name(...)} 的逐组写法。
+         *       一组都没注册过时调用它会在标准错误提示一句并忽略，不抛异常
+         *       （与 {@link #imageDir(File)} 的处理方式一致）。</li>
+         *   <li><b>只有命中才写键</b>：{@code name} 写在分组算法命中这一组注册表头的时候，
+         *       所以靠 {@link #keywords(String...)}、{@code w:tblHeader}、首行兜底或分组小标题后那一条规则
+         *       判出来的表头组都没有这个键。没命中的组保持 {@code headers}／{@code rows}／{@code source} 三个键不变。</li>
+         *   <li><b>一个名字可以命中多组</b>：同一张物理表里出现两次表头、或跨页断开后并回一张表再切出多个表头组时，
+         *       这几组都带同一个 {@code name}（实测 docx 样例的第 6、7 组是同一张年度目标表的两个表头组，
+         *       列名与来源页完全相同）。这不是错误，是「组按表头切、不按物理表切」的必然结果，
+         *       所以 {@code name} 不能当主键用；要一次拿全就用 {@link #rowsByName(Map, String)}，它把同名各组的行拼平。</li>
+         *   <li><b>命中判定沿用 {@link #headers(String...)} 的容差</b>（默认允许一列不一致），
+         *       名字跟着组走，也就跟着这条容差走 —— 文档里把 {@code 备注} 写成 {@code 说明} 照样命中并带上名字，
+         *       但一行数据恰好凑得够近时也会「误命中」，收紧成 {@link #headerTolerance(int) headerTolerance(0)} 即可。</li>
+         *   <li><b>多级表头照「合并之后那一行」注册，三种格式都命中</b>：分组算法先拿网格里的<b>每一行</b>单独比，
+         *       两行表头合并完还会拿<b>合并结果</b>再比一次。实测注册
+         *       {@code 客户名称/合同金额/已回款/回款率/备注}（即两行表头合并之后的列名）时，
+         *       docx／pdf／pptx 三份样例都带上 {@code name}，把 {@link #headerTolerance(int) headerTolerance}
+         *       收到 0 也一样命中，台账行数分别是 13／31／7（三份样例的客户数本来就不同）。
+         *       三种格式给出的网格行不一样：docx 与 pptx 是「上层 {@code 回款情况}」「下层
+         *       {@code 合同金额·已回款}」两行（docx 两行都带 {@code w:tblHeader}，靠这个标记才连着合并），
+         *       pdf 直接给一行合并后的结果。所以反过来<b>只注册上层那一行</b>就有差异：docx 照样 13 行，
+         *       pptx 的下层那行不再算表头、漏进数据变成 8 行，pdf 命不中（容忍度调到 2 才命中）。
+         *       跨格式共用一份注册时，把上下两种写法各注册一次、起<b>同一个名字</b>最稳
+         *       （实测组数与行数都不变：7 组 30 行／6 组 45 行／6 组 21 行）。
+         *       同一个名字之下只要有一份注册命中了，另一份命不中也<b>不再提示</b>「表头集合未匹配到任何行」
+         *       （提示的规则在 {@link Tables#warnUnmatchedHeaders}；没起名字的注册不受这条影响）。</li>
+         *   <li><b>改名是契约变更</b>：{@code name} 的字符串完全由调用方决定，改了它，下游按名字取数的代码就断了。
+         *       把它当字段名一样对待，进版本库。</li>
+         * </ul>
+         *
+         * <p>结果里键的先后固定为 {@code headers} → {@code rows} → {@code name}（起过名字才有）
+         * → {@code source}（{@link #source(boolean)} 开着才有）。
+         *
+         * @param label 组名；首尾空格会被去掉，空串或 {@code null} 等于不给这一组起名
+         */
+        public Options name(String label) {
+            if (headerGroups.isEmpty()) {
+                System.err.println("[name] 还没有注册任何表头集合，这一次 name(\"" + label + "\") 没有归属，已忽略 —— "
+                        + "它绑定的是写在它前面最近一次 headers(...) 注册的那一组");
+                return this;
+            }
+            headerLabels.set(headerLabels.size() - 1, label == null ? "" : label.trim());
             return this;
         }
 
@@ -530,7 +663,9 @@ public final class WordParser {
             return this;
         }
 
-        /** 宽松兜底：行内所有非空单元格都含关键字之一即判定为表头。 */
+        /**
+         * 宽松兜底：行内所有非空单元格都含关键字之一即判定为表头。
+         */
         public Options keywords(String... values) {
             for (String value : values) {
                 if (value != null && value.trim().length() > 0) {
@@ -540,21 +675,79 @@ public final class WordParser {
             return this;
         }
 
-        /** 跨整行合并的行（分组小标题）怎么归组，默认 {@link FullRow#KEEP}；传 null 等同于 KEEP。 */
+        /**
+         * 跨整行合并的行（分组小标题）怎么归组，默认 {@link FullRow#KEEP}；传 null 等同于 KEEP。
+         */
         public Options fullRow(FullRow mode) {
             this.fullRow = mode == null ? FullRow.KEEP : mode;
             return this;
         }
 
-        /** 图片内容怎么输出，默认 {@link ImageMode#META}（只给元信息）；传 null 等同于用默认值。 */
+        /**
+         * 图片内容怎么输出，默认 {@link ImageMode#META}（只给元信息）；传 null 等同于用默认值。
+         */
         public Options images(ImageMode mode) {
             this.imageMode = mode == null ? ImageMode.META : mode;
             return this;
         }
 
-        /** {@link ImageMode#FILE} 时图片写到的目录，不存在会在解析时创建。 */
+        /**
+         * {@link ImageMode#FILE} 时图片写到的目录，不存在会在解析时创建。
+         */
         public Options imageDir(File directory) {
             this.imageDir = directory;
+            return this;
+        }
+
+        /**
+         * 每组表格要不要带 {@code source} 键（起始页 / 幻灯片序号），默认带。
+         *
+         * <p>关掉它是给「只要文字和表格、不回填原文位置」的调用方省时间的：docx 的页码要问
+         * {@link LayoutCollector}，而它第一次回答时会把<b>整篇版面算一遍</b> —— 同一份
+         * {@code sales-report.docx} 实测单次解析从 23–30ms（上一版没有 source）涨到 83–227ms，
+         * 拆开看是加载 16–24ms、建 collector 0ms、5 张表 17 次取页码 98–131ms。
+         * 传 {@code false} 之后 Word 侧不再创建 {@code LayoutCollector}，同一份样例实测回到
+         * <b>11–35ms</b>。探针是同一 JVM 里开／关<b>交替</b>跑的（每种各 6 次、连跑两轮），避免后跑的那一种
+         * 白捡 JIT 预热：开 74–254ms 对 关 11–35ms，两轮里「关」的最大值都低于同一轮「开」的最小值；
+         * 跑完就删，仓库里没有它。
+         *
+         * <p>PDF 与 PPT 的页码是解析过程中本来就有的（{@code Page} 的下标、幻灯片的下标），不额外花钱，
+         * 但这个键名与含义三种格式一致，所以开关对三种格式<b>一起生效</b>：关掉以后三种格式都不写 {@code source}，
+         * 结果里每组只剩 {@code headers} 与 {@code rows} 两个键。
+         */
+        public Options source(boolean enabled) {
+            this.source = enabled;
+            return this;
+        }
+
+        /**
+         * 结果里要不要多一个顶层键 {@code unmatchedHeaders}，列出「注册了却一组都没命中」的表头集合，默认<b>不写</b>。
+         *
+         * <p>这份清单与标准错误那条 {@code 表头集合未匹配到任何行} 提示是同一份规则（{@link Tables#warnUnmatchedHeaders}），
+         * 每一项是 {@code {headers: [注册时写的列名]}}，注册时起过名字的另带 {@code name}；全部命中时是空列表
+         * （开着就一定有这个键，不会是 {@code null}）。键的先后是 {@code text} → {@code tables} → {@code images}
+         * → {@code unmatchedHeaders}，三种格式一致。
+         *
+         * <h3>为什么默认关</h3>
+         * <p>顶层新增一个键对下游是有代价的：把结果映射成 POJO 的调用方，Jackson 默认
+         * {@code FAIL_ON_UNKNOWN_PROPERTIES=true}，遇到没声明的键会抛 {@code UnrecognizedPropertyException}。
+         * 所以它做成显式打开：不打开时输出与上一版<b>逐字节相同</b>
+         * （{@code CrossFormatTest.unmatchedHeadersIsAnOptInTopLevelKey} 把三种格式关闭状态下的顶层键钉死成
+         * {@code [text, tables, images]}，打开后是这四个键且前三个的内容一字不变；
+         * {@code CrossFormatTest.documentedJsonLengthsAreTheRealOnes} 钉的是关闭状态下的 JSON 字符数）。
+         *
+         * <h4>什么时候值得打开</h4>
+         * <p>提示只落在标准错误里，跑在容器／定时任务里往往没人看，注册写错的表现是<b>静默丢数据</b>：
+         * 那一组的行会整段并进上一组表头，{@code rowsByName} 拿回来是空的，而结果本身看不出异常。
+         * 把这份清单随结果一起返回，调用方就能自己决定要不要告警、失败重试还是记日志。
+         *
+         * <p>同一个 {@code name} 之下已有一份注册命中时，命不中的那一份<b>不进清单</b>（那一组已经找到了，再报是噪声）；
+         * 没起名字的注册不受这条影响。
+         *
+         * @param enabled {@code true} 才写这个顶层键
+         */
+        public Options unmatchedHeaders(boolean enabled) {
+            this.unmatchedHeaders = enabled;
             return this;
         }
 
@@ -573,6 +766,21 @@ public final class WordParser {
         }
 
         /**
+         * 结果里每组要不要带 {@code source} 键，由 {@link Options#source(boolean)} 决定，默认要。
+         */
+        boolean writesSource() {
+            return source;
+        }
+
+        /**
+         * 结果里要不要带顶层键 {@code unmatchedHeaders}，由 {@link Options#unmatchedHeaders(boolean)} 决定，默认不带。
+         * 三个解析器都要读它，所以放在这里而不是各写一份。
+         */
+        boolean writesUnmatchedHeaders() {
+            return unmatchedHeaders;
+        }
+
+        /**
          * 内容是否内嵌在结果里。只有内嵌模式才做重复图片去重；
          * {@code FILE} 模式下每张图都要落成自己的文件，{@code META} 模式本来就不带内容。
          */
@@ -580,7 +788,9 @@ public final class WordParser {
             return imageMode == ImageMode.BASE64 || imageMode == ImageMode.BYTES;
         }
 
-        /** 调用方没给任何表头依据时，允许用首行兜底。 */
+        /**
+         * 调用方没给任何表头依据时，允许用首行兜底。
+         */
         boolean isSilent() {
             return headerGroups.isEmpty() && keywords.isEmpty();
         }
@@ -593,14 +803,23 @@ public final class WordParser {
             return headerGroups.get(index);
         }
 
-        /** 命中的表头集合中注册的原名，用作结果里的列名（比对用的是 {@link #headerGroup(int)} 的归一化名）。 */
+        /**
+         * 命中的表头集合中注册的原名，用作结果里的列名（比对用的是 {@link #headerGroup(int)} 的归一化名）。
+         */
         List<String> headerTitles(int index) {
             return headerGroupNames.get(index);
         }
 
         /**
+         * 这一组注册时起的名字，没起过是空串；由 {@link Tables} 在命中时写成结果的 {@code name} 键。
+         */
+        String headerName(int index) {
+            return index < headerLabels.size() ? headerLabels.get(index) : "";
+        }
+
+        /**
          * 返回该行命中的表头集合下标，未命中返回 -1。
-         *
+         * <p>
          * 比对规则：列数相同（忽略行尾空列）且不一致的列数不超过 {@code min(headerTolerance, 列数-1)}。
          */
         int matchHeader(List<String> cells) {
@@ -700,7 +919,9 @@ public final class WordParser {
 
     /* ---------------- 输出 ---------------- */
 
-    /** 输出成缩进 JSON，{@code parse} 的返回值直接序列化即可。 */
+    /**
+     * 输出成缩进 JSON，{@code parse} 的返回值直接序列化即可。
+     */
     public static String toJson(Object value) throws Exception {
         return Results.toJson(value);
     }
@@ -715,9 +936,81 @@ public final class WordParser {
         Results.writeImages(result, directory);
     }
 
+    /* ---------------- 按 name 取组取行 ---------------- */
+
+    /**
+     * 取 {@code name} 命中的表头组（返回结果里 {@code tables} 中的同一批对象，不是副本）。
+     *
+     * <p>与 {@link #toJson}、{@link #writeImages} 一样放在本类：三种格式的返回结构相同，所以取值入口只需要一份，
+     * {@link PdfParser#parse} 与 {@link PptParser#parse} 的结果同样传得进来。
+     *
+     * <p>同名多组是常态而不是意外：同一张物理表里两组表头、或跨页并回一张表再切出多个表头组时都会同名
+     * （实测 docx 样例的 {@code 年度目标} 命中第 6、7 两组，列名与来源页完全相同）。返回列表保留各组的边界，
+     * 想一次拿平铺的行用 {@link #rowsByName(Map, String)}。
+     *
+     * <p>返回的是结果里的原对象，改它等于改结果；要改前先自己拷一份。
+     *
+     * @param result {@link #parse}、{@link PdfParser#parse} 或 {@link PptParser#parse} 的返回值
+     * @param name   注册时 {@link Options#name(String)} 起的那个名字，比对用 {@code equals}（不做大小写与空格归一化）
+     * @return 命中的组，顺序与 {@code tables} 里一致；一个都没命中（含没起过名字、{@code result} 为 null、
+     * {@code name} 为 null）返回<b>空集合</b>而不是 null，也不抛异常
+     */
+    @SuppressWarnings("unchecked")
+    public static List<Map<String, Object>> tablesByName(Map<String, Object> result, String name) {
+        List<Map<String, Object>> hits = new ArrayList<Map<String, Object>>();
+        if (result == null || name == null) {
+            return hits;
+        }
+        Object tables = result.get("tables");
+        if (!(tables instanceof List)) {
+            return hits;
+        }
+        String wanted = name.trim();
+        if (wanted.length() == 0) {
+            return hits;
+        }
+        for (Object item : (List<?>) tables) {
+            if (!(item instanceof Map)) {
+                continue;
+            }
+            Map<String, Object> table = (Map<String, Object>) item;
+            if (wanted.equals(table.get("name"))) {
+                hits.add(table);
+            }
+        }
+        return hits;
+    }
+
+    /**
+     * 取 {@code name} 命中各组的行，按 {@code tables} 里的组顺序拼平。
+     *
+     * <p>入库时直接循环这些行即可，不必关心「一张表被切成了几组」。每行还是原来的行对象（键 = 那一组的列名），
+     * 所以同名各组的列名不一致时行与行的键可能不同 —— 三种格式的样例里同名列名一致，跨文档批处理时建议先问一次
+     * {@link #tablesByName(Map, String)} 确认列名再落库。
+     *
+     * @return 命中各组的行依次拼起来的列表；没命中时为空列表
+     */
+    @SuppressWarnings("unchecked")
+    public static List<Map<String, String>> rowsByName(Map<String, Object> result, String name) {
+        List<Map<String, String>> rows = new ArrayList<Map<String, String>>();
+        for (Map<String, Object> table : tablesByName(result, name)) {
+            Object listed = table.get("rows");
+            if (listed instanceof List) {
+                for (Object row : (List<?>) listed) {
+                    if (row instanceof Map) {
+                        rows.add((Map<String, String>) row);
+                    }
+                }
+            }
+        }
+        return rows;
+    }
+
     /* ---------------- 通用 ---------------- */
 
-    /** classpath 或当前目录存在 aspose-words.lic 时自动注册（一个进程只需一次），避免评估水印。 */
+    /**
+     * classpath 或当前目录存在 aspose-words.lic 时自动注册（一个进程只需一次），避免评估水印。
+     */
     private static void applyLicenseIfPresent() {
         Results.applyLicense("aspose-words", "/aspose-words.lic", "aspose-words.lic",
                 stream -> new License().setLicense(stream));
@@ -734,7 +1027,9 @@ public final class WordParser {
         return new Document(filePath);
     }
 
-    /** 同上，从输入流加载。传入的流由调用方负责关闭，本类不会关闭它。 */
+    /**
+     * 同上，从输入流加载。传入的流由调用方负责关闭，本类不会关闭它。
+     */
     private static Document open(InputStream inputStream) throws Exception {
         applyLicenseIfPresent();
         return new Document(inputStream);
@@ -742,12 +1037,18 @@ public final class WordParser {
 
     /* ---------------- 归一化后的表格网格 ---------------- */
 
-    /** 每行 cells 数量等于列数，合并覆盖的位置补上起始格的值。 */
+    /**
+     * 每行 cells 数量等于列数，合并覆盖的位置补上起始格的值。
+     */
     private static final class Grid {
         private final String[][] values;
-        /** horizontal[r][c] = true 表示该格是被左边单元格横向合并覆盖的延续格。 */
+        /**
+         * horizontal[r][c] = true 表示该格是被左边单元格横向合并覆盖的延续格。
+         */
         private final boolean[][] horizontal;
-        /** vertical[r][c] = true 表示该格是被上方单元格纵向合并覆盖的延续格。 */
+        /**
+         * vertical[r][c] = true 表示该格是被上方单元格纵向合并覆盖的延续格。
+         */
         private final boolean[][] vertical;
         private final int rowCount;
         private final int columnCount;
@@ -850,7 +1151,13 @@ public final class WordParser {
          * <p>样例核心表的 {@code 片区} 列同样是纵向合并（{@code 华东大区} 跨上海、江苏两行），
          * 那两行除了合并列还有 5 个自己的格子，新旧判据都不会误判；4 行数据一行不少，
          * 合并列的值回填成 {@code 华东大区}/{@code 华东南区}。
+         *
+         * <p>整行合并<b>又一格内容都没有</b>的空白行不算分组行（{@code !blank}，与 {@code PdfParser} 的
+         * {@code toGrid}、{@code PptParser} 的 {@code parseTable} 同一条判据）：排版里常有这种空白合并行当间隔，
+         * 把它当分组行的话，紧跟它的那一行会按「分组行之后的行是表头」被吃成表头 —— 实测两列表中间插一行空白
+         * 合并行时旧判据把一张表切成两组、{@code 丙丁} 那一行变成了列名。空白行本身留成一行空值，不凭空丢内容。
          * <i>（测试：{@code WordEdgeCasesTest.verticallyMergedDataRowIsNotAMistakenSeparator}、
+         * {@code WordEdgeCasesTest.blankFullWidthMergedRowIsNotASeparator}、
          * {@code WordParserTest.verticallyMergedColumnIsFilledFromItsOriginRow}）</i>
          */
         boolean isSeparator(int row) {
@@ -858,25 +1165,33 @@ public final class WordParser {
                 return false;
             }
             int origins = 0;
+            boolean blank = true;
             for (int c = 0; c < columnCount; c++) {
                 if (!horizontal[row][c]) {
                     origins++;
                 }
+                blank &= values[row][c].length() == 0;
             }
-            return origins == 1;
+            return origins == 1 && !blank;
         }
 
-        /** Word 的"重复标题行"标记 {@code w:tblHeader}，作者手工设置过的表头最可信。 */
+        /**
+         * Word 的"重复标题行"标记 {@code w:tblHeader}，作者手工设置过的表头最可信。
+         */
         boolean heading(int row, RowCollection rowNodes) {
             return Boolean.TRUE.equals(rowNodes.get(row).getRowFormat().getHeadingFormat());
         }
 
-        /** 一行的列值（合并覆盖的位置已由 {@link #fillMergedValues} 补齐）。 */
+        /**
+         * 一行的列值（合并覆盖的位置已由 {@link #fillMergedValues} 补齐）。
+         */
         List<String> row(int index) {
             return Arrays.asList(Arrays.copyOf(values[index], columnCount));
         }
 
-        /** 取某列的单元格格式；该行单元格数不足（跨整行合并等）时返回 null。 */
+        /**
+         * 取某列的单元格格式；该行单元格数不足（跨整行合并等）时返回 null。
+         */
         private static CellFormat formatAt(CellCollection cells, int column) {
             if (column >= cells.getCount()) {
                 return null;

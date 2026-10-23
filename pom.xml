@@ -13,14 +13,17 @@
          与 Java 包名 cn.net.tianxi.document 保持一致 -->
     <groupId>cn.net.tianxi</groupId>
     <artifactId>document-parser</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
     <name>document-parser</name>
-    <description>文档解析模块：把 Word/PDF/PPT 统一解析成文本、表格、图片三个集合</description>
+    <description>文档解析模块：把 Word/PDF/PPT 统一解析成文本、表格、图片三个集合。源码 GitHub hutianxi/document-parser，国内镜像 Gitee mailtianxi/document-parser</description>
     <url>https://github.com/hutianxi/document-parser</url>
     <inceptionYear>2026</inceptionYear>
 
     <!-- 下面四段（licenses / developers / scm / issueManagement）是发布到 Maven Central 的硬性要求，
-         缺任何一段 central-publishing-maven-plugin 的校验都会不通过 -->
+         缺任何一段 central-publishing-maven-plugin 的校验都会不通过。
+         SCM 类型里 url/connection/developerConnection 都是 1..1，issueManagement 也只能有一个，
+         写第二个会被解析时丢弃。所以两个仓库这样分工：connection 放 Gitee 镜像（只读），
+         developerConnection 与 url 放 GitHub 主仓库，issueManagement 指向 GitHub Issues。 -->
     <licenses>
         <license>
             <name>The Apache License, Version 2.0</name>
@@ -33,7 +36,7 @@
         <developer>
             <id>hutianxi</id>
             <name>hutianxi</name>
-            <email>67693982+hutianxi@users.noreply.github.com</email>
+            <email>mailtianxi@qq.com</email>
             <url>https://github.com/hutianxi</url>
             <roles>
                 <role>Owner</role>
@@ -43,7 +46,8 @@
         </developer>
     </developers>
     <scm>
-        <connection>scm:git:https://github.com/hutianxi/document-parser.git</connection>
+        <!-- connection 是「匿名只读取源码」的地址，给国内用户和镜像；developerConnection 是要写权限的，指向主仓库 -->
+        <connection>scm:git:https://gitee.com/mailtianxi/document-parser.git</connection>
         <developerConnection>scm:git:https://github.com/hutianxi/document-parser.git</developerConnection>
         <url>https://github.com/hutianxi/document-parser</url>
         <tag>HEAD</tag>

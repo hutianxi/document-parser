@@ -2,16 +2,9 @@ package cn.net.tianxi.document;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link Tables} 的单元测试：表头分组是三种格式共用的唯一一份算法，这里用手工网格直接断言，不经过 Aspose。
@@ -23,7 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TablesTest {
 
-    /** 便捷入口：每次新建一个 matched 集合（调用方不需要看它时用这个）。 */
+    /**
+     * 便捷入口：每次新建一个 matched 集合（调用方不需要看它时用这个）。
+     */
     private static List<Map<String, Object>> group(String[][] rows, boolean[] separator, boolean[] heading,
                                                    WordParser.Options options, boolean firstRowStyled) {
         return Tables.group(rows, separator, heading, options, new LinkedHashSet<Integer>(), firstRowStyled);
@@ -233,6 +228,61 @@ class TablesTest {
 
         assertEquals(Arrays.asList("列Bb", "列Ewew"), TestSupport.headers(blocks.get(0)));
         assertEquals(Arrays.asList(0), new ArrayList<Integer>(matched), "命中的是第 0 组");
+    }
+
+    @Test
+    void aRegisteredNameIsWrittenOnlyOnTheGroupsThatMatched() {
+        // name 跟着「命中第几组注册表头」走：同一张表里两组表头都命中同一组注册时，两组都带上同一个名字；
+        // 首行兜底、关键字、分组行之后那一条规则判出来的组一个键都不多
+        WordParser.Options options = WordParser.options().headers("片区", "年度目标", "完成率").name("年度目标");
+        List<Map<String, Object>> blocks = group(rows(
+                        new String[]{"片区", "年度目标", "完成率"},
+                        new String[]{"华东", "2400", "92%"},
+                        new String[]{"合计", "合计", "合计"},              // 跨整行合并的分组小标题
+                        new String[]{"片区", "年度目标", "完成率"},
+                        new String[]{"华南", "1800", "88%"}),
+                flags(false, false, true, false, false), null, options, false);
+
+        assertEquals(2, blocks.size());
+        assertEquals("年度目标", blocks.get(0).get("name"), "第一组表头命中注册集");
+        assertEquals("年度目标", blocks.get(1).get("name"), "分组行之后的第二组表头命中的是同一组注册集");
+        // 键的先后固定：headers → rows → name（起过名字才有）
+        assertEquals(Arrays.asList("headers", "rows", "name"),
+                new ArrayList<Object>(blocks.get(0).keySet()));
+    }
+
+    @Test
+    void unnamedRegistrationsAndFallbackHeadersGetNoNameKey() {
+        // 注册了但没起名 = 静默模式之外的普通注册，结果与不注册时一样不带 name 键
+        List<Map<String, Object>> named = group(rows(new String[]{"片区", "目标"}, new String[]{"华东", "2400"}),
+                WordParser.options().headers("片区", "目标"), false);
+        assertEquals(Arrays.asList("headers", "rows"), new ArrayList<Object>(named.get(0).keySet()));
+
+        // 靠首行兜底判出来的表头没有注册集可对应，自然也不会有名字
+        List<Map<String, Object>> fallback = group(rows(new String[]{"片区", "目标"}, new String[]{"华东", "2400"}),
+                WordParser.options(), false);
+        assertEquals(Arrays.asList("headers", "rows"), new ArrayList<Object>(fallback.get(0).keySet()));
+    }
+
+    @Test
+    void consecutiveHeaderRowsMatchingTwoRegisteredSetsKeepTheFirstName() {
+        // 多级表头的上下两行都注册过、且都起了名字时，以第一个命中的为准，
+        // 结果里不会出现「一组两个 name」；代价是第二个名字在这份文档上落不了地
+        WordParser.Options options = WordParser.options()
+                .headers("客户名称", "回款情况", "回款情况", "回款率").name("上层")
+                .headers("客户名称", "合同金额", "已回款", "回款率").name("下层");
+        List<Map<String, Object>> blocks = group(rows(
+                        new String[]{"客户名称", "回款情况", "回款情况", "回款率"},
+                        new String[]{"客户名称", "合同金额", "已回款", "回款率"},
+                        new String[]{"上海城建", "486", "486", "100%"}),
+                options, false);
+
+        assertEquals(1, blocks.size(), "两行表头仍然合成一组");
+        assertEquals(3, blocks.get(0).size(), "一组只有 headers/rows/name 三个键，name 不会重复写");
+        assertEquals("上层", blocks.get(0).get("name"), "第一个命中的注册集说了算");
+        assertEquals(Arrays.asList("客户名称", "合同金额", "已回款", "回款率"), TestSupport.headers(blocks.get(0)),
+                "列名仍按多级表头合并：下层填了格的用下层");
+        assertEquals(1, TestSupport.rows(blocks.get(0)).size());
     }
 
     @Test

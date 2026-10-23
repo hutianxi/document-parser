@@ -10,11 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link WordParser} 的功能测试，样例是 {@code src/test/resources/word/sales-report.docx}
@@ -32,11 +28,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class WordParserTest {
 
-    /** 静默模式（不注册表头、不给关键字）下的实测结果：7 个表头组、30 行数据、1 张图片。 */
+    /**
+     * 静默模式（不注册表头、不给关键字）下的实测结果：7 个表头组、30 行数据、1 张图片。
+     */
     private static final int SILENT_GROUPS = 7;
     private static final int SILENT_ROWS = 30;
 
-    /** 正文实测是这 13 段：域结果留着、域代码丢掉，软换行换成空格，内容控件里的段落也读到了。 */
+    /**
+     * 正文实测是这 13 段：域结果留着、域代码丢掉，软换行换成空格，内容控件里的段落也读到了。
+     */
     private static final String TEXT = String.join("\n",
             "2025 年度华东区销售业绩报告",
             "报告页次：3 页",
@@ -301,21 +301,67 @@ class WordParserTest {
     }
 
     @Test
-    void twoLevelHeaderDoesNotMatchAFlatRegisteredGroupButYieldsTheSameNames() throws Exception {
-        // 台账在 Word 里是两行表头（上层的「回款情况」跨两列），注册的却是一行 5 列；比对要求列数相同，
-        // 所以这一组命不中、会在 stderr 提示。结果并不受影响：多级表头合并出来的列名与注册名一字不差。
-        // 这也是「提示只是线索、不是错误」的一个真实例子
+    void unmatchedHeadersListKeepsTheRegisteredSpelling(@TempDir File directory) throws Exception {
+        // 清单与提示里写的都是注册时的<b>原文</b>，不是比对用的归一化形式（去掉全部空白、转小写）——
+        // 归一化之后调用方拿它去改自己的注册代码会对不上号，这条线索就白给了。
+        // 要现造一份 docx 才看得出差别：三份样例的表头全是中文，归一化前后长得一样
+        File file = TestSupport.docx(directory, "ascii-headers.docx", TestSupport.tbl(2,
+                TestSupport.tr(TestSupport.tc("AREA"), TestSupport.tc("TARGET")),
+                TestSupport.tr(TestSupport.tc("East"), TestSupport.tc("100"))));
+
+        Map<String, Object> result = WordParser.parse(file.getPath(), WordParser.options()
+                .headers("area", " target ")                       // 归一化后与文档那一行相等 → 命中
+                .headers("Total  Amount", "COUNT").name("总额")     // 一行都没命中 → 进清单
+                .unmatchedHeaders(true));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> unmatched = (List<Map<String, Object>>) result.get("unmatchedHeaders");
+
+        assertEquals(1, unmatched.size(), "两组注册里只有第二组没命中");
+        assertEquals(Arrays.asList("Total  Amount", "COUNT"), unmatched.get(0).get("headers"),
+                "原文照抄：中间那两个空格与大写都留着，只 trim 掉首尾");
+        assertEquals("总额", unmatched.get(0).get("name"), "起了名字的注册把名字一起带上");
+        assertEquals(Arrays.asList("area", "target"), TestSupport.headers(TestSupport.table(result, 0)),
+                "命中那组的列名换成注册时写的名字（trim 过），文档里是大写也一样");
+    }
+
+    @Test
+    void aTwoLevelHeaderMatchesTheMergedRowAtAnyTolerance() throws Exception {
+        // 台账在 Word 里是两行表头（上层的「回款情况」跨两列，两行都带 w:tblHeader），注册的却是合并之后的那一行。
+        // 网格里单独的两行都对不上：上层那行与注册名差 2 格、超出默认容忍度 1；下层那行只有中间两格有字
+        // （纵向合并的延续格没有文字），末尾空列在比对前被裁掉，只剩 3 格、列数也不同。
+        // 命中靠的是分组算法在合并完这两行之后拿<b>合并结果</b>又比了一次，所以容忍度收到 0 也照样命中 ——
+        // 卡的不是容差，而是「有没有拿合并结果比过」。列名与分组都不受注册写法影响。
         final String stderr = TestSupport.captureStderr(() ->
                 WordParser.parse(TestSupport.WORD, TestSupport.registered()));
 
-        assertTrue(stderr.contains("客户名称"), "台账那组应该被提示未匹配：" + stderr);
+        assertEquals("", stderr, "五组注册在 docx 上全部命中，不该留下未匹配提示");
         assertFalse(stderr.contains("片区"), "核心表与目标表都该命中：" + stderr);
-        assertFalse(stderr.contains("工单类型"), "工单表该命中：" + stderr);
-        assertFalse(stderr.contains("故障部件"), "嵌套表该命中：" + stderr);
 
         Map<String, Object> result = WordParser.parse(TestSupport.WORD, TestSupport.registered());
         assertEquals(Arrays.asList("客户名称", "合同金额", "已回款", "回款率", "备注"),
                 TestSupport.headers(TestSupport.table(result, 1)));
+
+        // 上面那句「差 2 格、超出容忍度 1」是可验证的，不是推测：容忍度调到 2 时上层那行本身就能命中；
+        // 照着文档里真实的上层那一行注册，默认容忍度下也命中。三种写法都落在第 1 组，组数与列名不变
+        Map<String, Object> tolerant = WordParser.parse(TestSupport.WORD, WordParser.options()
+                .headers("客户名称", "合同金额", "已回款", "回款率", "备注").name("回款台账")
+                .headerTolerance(2));
+        assertEquals("回款台账", TestSupport.table(tolerant, 1).get("name"), "容忍度 2 能盖住那 2 格差异");
+        assertEquals(Arrays.asList("客户名称", "合同金额", "已回款", "回款率", "备注"),
+                TestSupport.headers(TestSupport.table(tolerant, 1)));
+
+        Map<String, Object> strict = WordParser.parse(TestSupport.WORD, WordParser.options()
+                .headers("客户名称", "合同金额", "已回款", "回款率", "备注").name("回款台账")
+                .headerTolerance(0));
+        assertEquals("回款台账", TestSupport.table(strict, 1).get("name"), "容忍度 0 靠合并结果命中");
+
+        Map<String, Object> upperRow = WordParser.parse(TestSupport.WORD, WordParser.options()
+                .headers("客户名称", "回款情况", "回款情况", "回款率", "备注").name("回款台账"));
+        assertEquals("回款台账", TestSupport.table(upperRow, 1).get("name"), "注册上层那一行则默认容忍度即可命中");
+        assertEquals(Arrays.asList("客户名称", "合同金额", "已回款", "回款率", "备注"),
+                TestSupport.headers(TestSupport.table(upperRow, 1)), "合并之后列名与注册合并写法时一致");
+        assertEquals(7, TestSupport.tables(upperRow).size(), "换一种注册写法不改变分组");
     }
 
     /* ---------------- 图片 ---------------- */
@@ -345,7 +391,7 @@ class WordParserTest {
         String payload = (String) TestSupport.image(result, 0).get("base64");
 
         assertTrue(payload.startsWith("data:image/png;base64,"), payload.substring(0, 40));
-        // 实测：META 4409 字符 → BASE64 899039 字符，那张 670939 字节的图编码后约 89 万字符。
+        // 实测：META 4740 字符 → BASE64 899370 字符，那张 670939 字节的图编码后约 89 万字符。
         // 这就是「只关心文字和表格时别选 BASE64」的理由
         assertTrue(base64.length() > meta.length() * 100, "meta=" + meta.length() + " base64=" + base64.length());
         assertEquals(670939, java.util.Base64.getDecoder()
@@ -423,8 +469,13 @@ class WordParserTest {
 
     @Test
     void missingFileReportsThePath() {
-        Exception thrown = assertThrows(Exception.class, () ->
-                WordParser.parse("src/test/resources/word/not-here.docx", WordParser.options()));
-        assertNotNull(thrown.getMessage());
+        // Aspose.Words 抛的是 JDK 的 FileNotFoundException，消息是「Can't find file: <路径>.」，路径原样带上。
+        // pdf 与 pptx 抛的是各自库里的类型，三个解析器不统一，见 CrossFormatTest.aMissingFileThrowsFromAllThreeParsers
+        String path = "src/test/resources/word/not-here.docx";
+
+        java.io.FileNotFoundException thrown = assertThrows(java.io.FileNotFoundException.class, () ->
+                WordParser.parse(path, WordParser.options()));
+
+        assertTrue(thrown.getMessage().contains(path), thrown.getMessage());
     }
 }

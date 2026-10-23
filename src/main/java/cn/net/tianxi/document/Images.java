@@ -3,12 +3,7 @@ package cn.net.tianxi.document;
 import java.io.File;
 import java.io.OutputStream;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -30,7 +25,7 @@ import java.util.regex.Pattern;
  * {@code META}（默认）只有上面这些元信息；{@code BASE64} 多一个 {@code "base64":"data:image/png;base64,..."}，
  * {@code BYTES} 多一个 {@code "bytes"}（原始 {@code byte[]}，Jackson 会编成不带 {@code data:} 前缀的 base64），
  * {@code FILE} 多一个 {@code "path"}（落盘后的绝对路径）且结果里不留内容。整串 JSON 的长度：
- * docx 4409 → 899039、pdf 6186 → 57789、pptx 3262 → 897892 ——
+ * docx 4740 → 899370、pdf 6473 → 58076、pptx 3526 → 898156 ——
  * docx 那张 670939 字节的 PNG 编码后是 894610 个字符，占了 99.5%，这就是默认不给内容的原因。
  *
  * <h2>文件名与类型</h2>
@@ -62,7 +57,7 @@ import java.util.regex.Pattern;
  *       不承担防篡改职责，别拿它当安全摘要。</li>
  * </ul>
  *
- * <p><i>测试：{@code ImagesTest}（24 条，直接喂字节，不经过 Aspose）+ 三个解析器测试里的端到端断言。</i>
+ * <p><i>测试：{@code ImagesTest}（25 条，直接喂字节，不经过 Aspose）+ 三个解析器测试里的端到端断言。</i>
  */
 final class Images {
 
@@ -76,7 +71,9 @@ final class Images {
 
     private final WordParser.Options options;
     private final List<Map<String, Object>> entries = new ArrayList<Map<String, Object>>();
-    /** 内容指纹 -&gt; 该内容第一次出现时在 {@code entries} 里的下标。 */
+    /**
+     * 内容指纹 -&gt; 该内容第一次出现时在 {@code entries} 里的下标。
+     */
     private final Map<String, Integer> firstSeen = new LinkedHashMap<String, Integer>();
     private int index;
 
@@ -122,7 +119,9 @@ final class Images {
         entries.add(image);
     }
 
-    /** 记录一张外链图片（Word 里"链接到文件"、PPT 里"仅链接"）：字节不在文档内，只给路径。 */
+    /**
+     * 记录一张外链图片（Word 里"链接到文件"、PPT 里"仅链接"）：字节不在文档内，只给路径。
+     */
     void link(String type, int width, int height, String source) {
         Map<String, Object> image = meta(normalizeType(type, null), width, height);
         image.put("link", source);
@@ -138,7 +137,9 @@ final class Images {
         return image;
     }
 
-    /** 按 {@link WordParser.ImageMode} 决定内容放哪儿；{@code META} 模式什么都不放。 */
+    /**
+     * 按 {@link WordParser.ImageMode} 决定内容放哪儿；{@code META} 模式什么都不放。
+     */
     private void putContent(Map<String, Object> image, byte[] bytes, String type) throws Exception {
         if (options.images() == WordParser.ImageMode.BASE64) {
             image.put("base64", "data:" + contentType(type) + ";base64," + Base64.getEncoder().encodeToString(bytes));
@@ -198,7 +199,9 @@ final class Images {
         }
     }
 
-    /** 内容指纹：SHA-1 十六进制，用于识别重复图片、也让调用方能按内容缓存。 */
+    /**
+     * 内容指纹：SHA-1 十六进制，用于识别重复图片、也让调用方能按内容缓存。
+     */
     static String contentId(byte[] bytes) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-1").digest(bytes);
         StringBuilder hex = new StringBuilder(digest.length * 2);
@@ -208,7 +211,9 @@ final class Images {
         return hex.toString();
     }
 
-    /** 类型名统一成大写：{@code image/jpeg}、{@code jpg}、{@code JPEG} 都会变成 {@code JPEG}。 */
+    /**
+     * 类型名统一成大写：{@code image/jpeg}、{@code jpg}、{@code JPEG} 都会变成 {@code JPEG}。
+     */
     private static String normalizeType(String type, byte[] bytes) {
         String value = type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
         int slash = value.indexOf('/');
@@ -229,7 +234,9 @@ final class Images {
         return value.length() == 0 ? "UNKNOWN" : value.toUpperCase(Locale.ROOT);
     }
 
-    /** 按文件头魔数判断类型，PDF 的 XImage 拿不到干净的类型名时用这个。 */
+    /**
+     * 按文件头魔数判断类型，PDF 的 XImage 拿不到干净的类型名时用这个。
+     */
     static String sniff(byte[] bytes) {
         if (bytes == null || bytes.length < 4) {
             return null;
@@ -262,12 +269,18 @@ final class Images {
         return null;
     }
 
-    /** 图片扩展名：未知类型用 bin。 */
+    /**
+     * 图片扩展名：未知类型用 bin。
+     *
+     * <p>用 {@link Locale#ROOT} 而不是默认 Locale：土耳其语环境下 {@code "TIFF".toLowerCase()} 得到
+     * {@code tıff}（无点 ı），文件名就成了 {@code image-1.tıff}，扩展名对不上任何图片查看器。
+     * 同一条理由见 {@link Results#normalize}。
+     */
     static String extension(String type) {
         if ("JPEG".equals(type)) {
             return "jpg";
         }
-        return "UNKNOWN".equals(type) ? "bin" : type.toLowerCase();
+        return "UNKNOWN".equals(type) ? "bin" : type.toLowerCase(Locale.ROOT);
     }
 
     static String contentType(String type) {

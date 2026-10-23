@@ -2,22 +2,14 @@ package cn.net.tianxi.document;
 
 import org.junit.jupiter.api.function.Executable;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
+import java.io.*;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 测试共用工具：取样例路径、从结果 Map 里取三个集合、现场拼最小 OOXML 部件、收标准错误输出。
@@ -31,7 +23,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 评估模式的痕迹按产品不同，样例是照着这些实测边界造的（依据见 docs.aspose.com 各产品的 Licensing 页）：
  * <ul>
  *   <li><b>Aspose.Words</b>：评估模式注入水印段落、并把规模限制在几百个段落。水印由
- *       {@code Results.cleanContent} 过滤掉，样例只有 13 段正文，所以 {@code text} 与 licensed 一致；</li>
+ *       {@code Results.cleanContent} 过滤掉，样例只有 13 段正文，所以 {@code text} 与 licensed 一致；
+ *       <b>用它导出 PDF 时另有两件事</b>（{@code PdfCrossPageTableTest}、{@code PdfBorderlessTableTest}
+ *       就是照这条实测的）：每一页盖一张 920×500 的水印<b>图</b>（会进结果的 {@code images}），
+ *       正文段落还会被截断（{@code PROSE 一段普通正文…} 只剩 {@code PROSE}）。图排在页面内容之后，
+ *       跨页合并的「前一截贴着页底」因此不成立 —— 现造 PDF 样例要先用 Aspose.PDF 把每页图片删掉再存一份；</li></li>
  *   <li><b>Aspose.PDF</b>：评估模式限制的是文字层。实测这一条落在段落抽取上（{@code ParagraphAbsorber} 每页只给
  *       前几段），表格吸收器与图片不受影响：31 行的台账整表读全了、1 张图片的字节也完整。
  *       样例正文全部在表格里，页面之间只用空段落撑开（空段落不进 {@code text}），所以 {@code text} 恒为 {@code ""}，
@@ -47,16 +43,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 final class TestSupport {
 
-    /** 报告正文（13 段）+ 四张表（五组表头）+ 一张看板截图：结构最全的样例。 */
+    /**
+     * 报告正文（13 段）+ 四张表（五组表头）+ 一张看板截图：结构最全的样例。
+     */
     static final String WORD = "src/test/resources/word/sales-report.docx";
 
-    /** 同一份内容用 Word 导出的 3 页 PDF：31 行的台账跨页断开，靠几何判据并回一张；正文全在表格里。 */
+    /**
+     * 同源报告的<b>加长版</b>（台账 30 家客户，源文件不在仓库里）用真 Word 导出的 3 页 PDF：
+     * 31 行的台账跨页断开，靠几何判据并回一张；正文全在表格里，所以 {@code text} 是空串。
+     */
     static final String PDF = "src/test/resources/pdf/sales-report.pdf";
 
-    /** 同一份内容的 3 页幻灯片：文本框、组合形状、四张表（跨行/跨列合并）、一张图片。 */
+    /**
+     * 同源的 3 页幻灯片：文本框、组合形状、四张表（跨行/跨列合并）、一张图片。
+     * 内容按幻灯片的版面裁过（台账 6 家客户、客户名压在 5 个字内），不是 docx 的逐字副本。
+     */
     static final String PPT = "src/test/resources/ppt/sales-report.pptx";
 
-    /** 全部样例，契约类断言（列名对齐、图片元信息）逐个跑一遍。 */
+    /**
+     * 全部样例，契约类断言（列名对齐、图片元信息）逐个跑一遍。
+     */
     static final String[] ALL_SAMPLES = {WORD, PDF, PPT};
 
     /**
@@ -72,6 +78,50 @@ final class TestSupport {
                 .headers("工单类型", "工单数", "处理说明")
                 .headers("故障部件", "工单数")
                 .headers("片区", "年度目标", "完成率");
+    }
+
+    /**
+     * 同一份五组注册表头，其中三组起了名字 —— 「读了文档只挑要入库的那几张表起名」的用法样例。
+     *
+     * <p>命中的位置（实测，组号从 1 起，与 README 的口径一致）：{@code 季度明细} 三份样例都是第 1 组；
+     * {@code 回款台账} 三份样例都是第 2 组；{@code 年度目标} 在三份上都命中<b>两组</b>
+     * —— docx 第 6、7 组，pdf 第 5、6 组，pptx 第 4、5 组，都是同一张物理表被 2025 与 2026 两段表头切开的
+     * 结果，所以它专门用来验证「一个名字对应多组」（见 {@code TableByNameTest}，那里用的是从 0 起的下标）。
+     *
+     * <p>{@code 回款台账} 注册的是两行表头<b>合并之后</b>的列名，三份样例都命中：docx 与 pptx 的网格里
+     * 只有「上层 {@code 回款情况}」「下层 {@code 合同金额·已回款}」两行，单独比都对不上，
+     * 是分组算法在多级表头合并完之后拿<b>合并结果</b>又比了一次才命中的；pdf 的网格里直接给了合并后那一行。
+     * 所以这份注册在三种格式下都能带上 {@code name}，docx 上五组注册<b>全部</b>命中、标准错误上一个字都不打。
+     * 仍然存在的格式差异在「照上层那一行注册」：pdf 命不中，pptx 会把下层那行漏进数据（7 行变 8 行）——
+     * 跨格式共用一份注册时，把多级表头的上下两种写法都注册、起同一个名字最稳（见 {@link #namedBothHeaderRows()}）。
+     */
+    static WordParser.Options named() {
+        return WordParser.options()
+                .headers("片区", "区域", "销售额", "回款率", "销售额", "回款率", "备注").name("季度明细")
+                .headers("客户名称", "合同金额", "已回款", "回款率", "备注").name("回款台账")
+                .headers("工单类型", "工单数", "处理说明")
+                .headers("故障部件", "工单数")
+                .headers("片区", "年度目标", "完成率").name("年度目标");
+    }
+
+    /**
+     * {@link #named()} 之外再多注册一组「台账上层那一行」，两个注册起<b>同一个</b> {@code 回款台账} ——
+     * 跨格式共用一份注册时的保险写法：多级表头的上下两种写法都注册，哪一份先命中都行。
+     *
+     * <p>实测（{@code TableByNameTest}）：三份样例的台账组都带上了 {@code name}，组数与行数与 {@link #named()}
+     * 完全一致（7 组 30 行／6 组 45 行／6 组 21 行），列名也不变 —— 多注册一组不改变分组结果。
+     * 三份样例里 pdf 只有合并后那一行（只注册上层写法时在容忍度 1 下命不中，调到 2 才命中），
+     * pptx 上下两行都在（只注册上层写法时下层那行不算表头、漏进数据，7 行变 8 行），所以两种写法都注册最省心。
+     * 同名之下已有一份命中时，另一份命不中也不会在标准错误上提示未匹配（规则在 {@link Tables}）。
+     */
+    static WordParser.Options namedBothHeaderRows() {
+        return WordParser.options()
+                .headers("片区", "区域", "销售额", "回款率", "销售额", "回款率", "备注").name("季度明细")
+                .headers("客户名称", "回款情况", "回款情况", "回款率", "备注").name("回款台账")
+                .headers("客户名称", "合同金额", "已回款", "回款率", "备注").name("回款台账")
+                .headers("工单类型", "工单数", "处理说明")
+                .headers("故障部件", "工单数")
+                .headers("片区", "年度目标", "完成率").name("年度目标");
     }
 
     private static final Charset UTF_8 = Charset.forName("UTF-8");
@@ -117,19 +167,45 @@ final class TestSupport {
         return images.get(index);
     }
 
-    /** 一行数据按列顺序的值（{@code LinkedHashMap} 保证顺序 = {@code headers} 顺序）。 */
+    /**
+     * 一组的来源位置：{@code {page: 起始页, lastPage: 结束页}}，后者只在跨页时出现；pptx 的页指幻灯片序号。
+     */
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> source(Map<String, Object> table) {
+        return (Map<String, Object>) table.get("source");
+    }
+
+    /**
+     * 一行数据按列顺序的值（{@code LinkedHashMap} 保证顺序 = {@code headers} 顺序）。
+     */
     static List<String> values(Map<String, String> row) {
         return new ArrayList<String>(row.values());
     }
 
-    /** 第 {@code index} 组第 {@code row} 行的值，按列顺序。 */
+    /**
+     * 去掉 {@code source} 键的组副本，用于跨格式逐组比对整个 JSON。
+     *
+     * <p>页码取决于各文件自己的分页（docx 台账 12 家客户、PDF 30 家，同一张目标表在 docx 是第 2 页、
+     * 在 PDF 是第 3 页），逐组比对只能比内容；来源位置单独用数值断言钉住。
+     */
+    static Map<String, Object> withoutSource(Map<String, Object> table) {
+        Map<String, Object> copy = new LinkedHashMap<String, Object>(table);
+        copy.remove("source");
+        return copy;
+    }
+
+    /**
+     * 第 {@code index} 组第 {@code row} 行的值，按列顺序。
+     */
     static List<String> values(Map<String, Object> result, int index, int row) {
         List<Map<String, String>> rows = rows(table(result, index));
         assertTrue(row < rows.size(), "第 " + index + " 组只有 " + rows.size() + " 行，取不到第 " + row + " 行");
         return values(rows.get(row));
     }
 
-    /** 所有组的行数之和。 */
+    /**
+     * 所有组的行数之和。
+     */
     static int totalRows(Map<String, Object> result) {
         int total = 0;
         for (Map<String, Object> table : tables(result)) {
@@ -163,7 +239,9 @@ final class TestSupport {
         }
     }
 
-    /** 图片元信息契约：内嵌图片一定有文件名、类型、宽高、字节数与内容指纹；外链图片只给 link。 */
+    /**
+     * 图片元信息契约：内嵌图片一定有文件名、类型、宽高、字节数与内容指纹；外链图片只给 link。
+     */
     static void assertImageMeta(Map<String, Object> image) {
         assertNotNull(image.get("fileName"), "图片缺 fileName：" + image);
         assertNotNull(image.get("type"), "图片缺 type：" + image);
@@ -265,12 +343,16 @@ final class TestSupport {
         zip.closeEntry();
     }
 
-    /** 一个只有一段文字的段落。 */
+    /**
+     * 一个只有一段文字的段落。
+     */
     static String p(String text) {
         return "<w:p><w:r><w:t xml:space=\"preserve\">" + escape(text) + "</w:t></w:r></w:p>";
     }
 
-    /** 空段落。单元格里的嵌套表后面必须跟一个段落，OOXML 的硬性要求。 */
+    /**
+     * 空段落。单元格里的嵌套表后面必须跟一个段落，OOXML 的硬性要求。
+     */
     static String emptyP() {
         return "<w:p/>";
     }
@@ -294,14 +376,18 @@ final class TestSupport {
                 + "<w:r><w:t xml:space=\"preserve\">" + escape(after) + "</w:t></w:r></w:p>";
     }
 
-    /** 用软换行（Shift+Enter，{@code <w:br/>}）分成两行的段落。 */
+    /**
+     * 用软换行（Shift+Enter，{@code <w:br/>}）分成两行的段落。
+     */
     static String pSoftBreak(String firstLine, String secondLine) {
         return "<w:p><w:r><w:t xml:space=\"preserve\">" + escape(firstLine) + "</w:t>"
                 + "<w:br/>"
                 + "<w:t xml:space=\"preserve\">" + escape(secondLine) + "</w:t></w:r></w:p>";
     }
 
-    /** 一张表；{@code tblLook firstRow=1} 与 Word 里新建表格的默认值一致（首行按标题行处理）。 */
+    /**
+     * 一张表；{@code tblLook firstRow=1} 与 Word 里新建表格的默认值一致（首行按标题行处理）。
+     */
     static String tbl(int columns, String... rows) {
         StringBuilder xml = new StringBuilder("<w:tbl><w:tblPr><w:tblStyle w:val=\"TableGrid\"/>"
                 + "<w:tblW w:w=\"0\" w:type=\"auto\"/>"
@@ -325,34 +411,46 @@ final class TestSupport {
         return xml.append("</w:tr>").toString();
     }
 
-    /** 普通单元格。 */
+    /**
+     * 普通单元格。
+     */
     static String tc(String text) {
         return tcInner(p(text));
     }
 
-    /** 跨 {@code gridSpan} 列合并的起始格；整行只有一个起始格时即「跨整行合并」的分组行。 */
+    /**
+     * 跨 {@code gridSpan} 列合并的起始格；整行只有一个起始格时即「跨整行合并」的分组行。
+     */
     static String tcSpan(String text, int gridSpan) {
         return "<w:tc><w:tcPr><w:tcW w:w=\"2000\" w:type=\"dxa\"/><w:gridSpan w:val=\"" + gridSpan + "\"/></w:tcPr>"
                 + p(text) + "</w:tc>";
     }
 
-    /** 纵向合并的起始格。 */
+    /**
+     * 纵向合并的起始格。
+     */
     static String tcVerticalStart(String text) {
         return "<w:tc><w:tcPr><w:tcW w:w=\"2000\" w:type=\"dxa\"/><w:vMerge w:val=\"restart\"/></w:tcPr>"
                 + p(text) + "</w:tc>";
     }
 
-    /** 纵向合并的延续格：自己没有内容，解析时回填起始格的值。 */
+    /**
+     * 纵向合并的延续格：自己没有内容，解析时回填起始格的值。
+     */
     static String tcVerticalContinue() {
         return "<w:tc><w:tcPr><w:tcW w:w=\"2000\" w:type=\"dxa\"/><w:vMerge/></w:tcPr><w:p/></w:tc>";
     }
 
-    /** 单元格里放任意部件（嵌套表、内容控件），调用方自己保证以段落结尾。 */
+    /**
+     * 单元格里放任意部件（嵌套表、内容控件），调用方自己保证以段落结尾。
+     */
     static String tcInner(String innerXml) {
         return "<w:tc><w:tcPr><w:tcW w:w=\"2000\" w:type=\"dxa\"/></w:tcPr>" + innerXml + "</w:tc>";
     }
 
-    /** 内容控件（{@code w:sdt}）：Word 的模板和表单常用，Body 之下、单元格之内都能出现。 */
+    /**
+     * 内容控件（{@code w:sdt}）：Word 的模板和表单常用，Body 之下、单元格之内都能出现。
+     */
     static String sdt(String... content) {
         StringBuilder xml = new StringBuilder("<w:sdt><w:sdtPr><w:id w:val=\"1\"/></w:sdtPr><w:sdtContent>");
         for (String part : content) {
@@ -370,6 +468,188 @@ final class TestSupport {
         return "<w:sdt><w:sdtPr><w:id w:val=\"2\"/>"
                 + "<w:placeholderText w:val=\"Click here to enter text.\"/><w:text/></w:sdtPr>"
                 + "<w:sdtContent><w:p/></w:sdtContent></w:sdt>";
+    }
+
+    /* ---------------- 现场拼最小 pptx ---------------- */
+    /* 一页幻灯片的最小 OOXML 包。母版/版式/主题直接从样例 pptx 里拷（Aspose.Slides 加载时要有这几份），
+       幻灯片本身按传入的形状现写。用途同 docx：造样例文件里不值得专门存一份的边角结构（合并单元格的行）。 */
+
+    private static final String PPT_CONTENT_TYPES = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+            + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+            + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+            + "<Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-"
+            + "officedocument.presentationml.presentation.main+xml\"/>"
+            + "<Override PartName=\"/ppt/slideMasters/slideMaster1.xml\" ContentType=\"application/vnd"
+            + ".openxmlformats-officedocument.presentationml.slideMaster+xml\"/>"
+            + "<Override PartName=\"/ppt/slideLayouts/slideLayout1.xml\" ContentType=\"application/vnd"
+            + ".openxmlformats-officedocument.presentationml.slideLayout+xml\"/>"
+            + "<Override PartName=\"/ppt/slides/slide1.xml\" ContentType=\"application/vnd.openxmlformats-"
+            + "officedocument.presentationml.slide+xml\"/>"
+            + "<Override PartName=\"/ppt/theme/theme1.xml\" ContentType=\"application/vnd.openxmlformats-"
+            + "officedocument.theme+xml\"/></Types>";
+
+    private static final String PPT_PRESENTATION = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            + "<p:presentation xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\""
+            + " xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\""
+            + " xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" saveSubsetFonts=\"1\">"
+            + "<p:sldMasterIdLst><p:sldMasterId id=\"2147483648\" r:id=\"rId1\"/></p:sldMasterIdLst>"
+            + "<p:sldIdLst><p:sldId id=\"256\" r:id=\"rId2\"/></p:sldIdLst>"
+            + "<p:sldSz cx=\"9144000\" cy=\"6858000\" type=\"screen16x9\"/>"
+            + "<p:notesSz cx=\"6858000\" cy=\"9144000\"/></p:presentation>";
+
+    private static final String PPT_PRESENTATION_RELS = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006"
+            + "/relationships/slideMaster\" Target=\"slideMasters/slideMaster1.xml\"/>"
+            + "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006"
+            + "/relationships/slide\" Target=\"slides/slide1.xml\"/>"
+            + "<Relationship Id=\"rId4\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006"
+            + "/relationships/theme\" Target=\"theme/theme1.xml\"/></Relationships>";
+
+    private static final String PPT_SLIDE_RELS = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument"
+            + "/2006/relationships/slideLayout\" Target=\"../slideLayouts/slideLayout1.xml\"/>"
+            + "</Relationships>";
+
+    private static final String PPT_SLIDE_HEAD = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            + "<p:sld xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\""
+            + " xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\""
+            + " xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"><p:cSld><p:spTree>"
+            + "<p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>"
+            + "<p:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/>"
+            + "<a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr>";
+
+    /**
+     * 把若干形状拼成一页幻灯片，写成最小 pptx。
+     *
+     * @param directory 输出目录（用 JUnit 的 {@code @TempDir}），文件已存在时覆盖
+     * @param fileName  文件名，例如 {@code vmerge.pptx}
+     * @param shapes    幻灯片里的形状，用 {@link #pTbl} 拼
+     */
+    static File pptx(File directory, String fileName, String... shapes) throws IOException {
+        StringBuilder slide = new StringBuilder(PPT_SLIDE_HEAD);
+        for (String shape : shapes) {
+            slide.append(shape);
+        }
+        slide.append("</p:spTree></p:cSld></p:sld>");
+
+        File file = new File(directory, fileName);
+        OutputStream out = new FileOutputStream(file);
+        ZipFile sample = new ZipFile(PPT);
+        try {
+            ZipOutputStream zip = new ZipOutputStream(out, UTF_8);
+            entry(zip, "[Content_Types].xml", PPT_CONTENT_TYPES);
+            entry(zip, "ppt/presentation.xml", PPT_PRESENTATION);
+            entry(zip, "ppt/_rels/presentation.xml.rels", PPT_PRESENTATION_RELS);
+            entry(zip, "ppt/slides/slide1.xml", slide.toString());
+            entry(zip, "ppt/slides/_rels/slide1.xml.rels", PPT_SLIDE_RELS);
+            Enumeration<? extends ZipEntry> entries = sample.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry source = entries.nextElement();
+                String name = source.getName();
+                // 幻灯片、图片、包结构都换掉了；只留母版/版式/主题/根 rels
+                if (name.equals("[Content_Types].xml") || name.startsWith("ppt/slides/")
+                        || name.startsWith("ppt/media/") || name.equals("ppt/presentation.xml")
+                        || name.equals("ppt/_rels/presentation.xml.rels")) {
+                    continue;
+                }
+                zip.putNextEntry(new ZipEntry(name));
+                copy(sample.getInputStream(source), zip);
+                zip.closeEntry();
+            }
+            zip.finish();
+        } finally {
+            sample.close();
+            out.close();
+        }
+        return file;
+    }
+
+    private static void copy(InputStream in, ZipOutputStream out) throws IOException {
+        try {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                out.write(buffer, 0, read);
+            }
+        } finally {
+            in.close();
+        }
+    }
+
+    /**
+     * 一张 PPT 表格；{@code firstRow=1} 与 PowerPoint 里新建表格的默认值一致（首行按标题行处理）。
+     *
+     * <p>与 {@link #tbl} 的区别：PPT 的合并属性写在 {@code <a:tc>} 上（{@code rowSpan}/{@code colSpan}/
+     * {@code hMerge}/{@code vMerge}），不是 {@code w:tcPr} 的子元素。
+     */
+    static String pTbl(int columns, String... rows) {
+        StringBuilder xml = new StringBuilder("<p:graphicFrame><p:nvGraphicFramePr>"
+                + "<p:cNvPr id=\"5\" name=\"Table 5\"/>"
+                + "<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp=\"1\"/></p:cNvGraphicFramePr><p:nvPr/>"
+                + "</p:nvGraphicFramePr><p:xfrm><a:off x=\"457200\" y=\"1400000\"/>"
+                + "<a:ext cx=\"4000000\" cy=\"960000\"/></p:xfrm><a:graphic><a:graphicData"
+                + " uri=\"http://schemas.openxmlformats.org/drawingml/2006/table\"><a:tbl>"
+                + "<a:tblPr firstRow=\"1\" bandRow=\"1\"/><a:tblGrid>");
+        for (int c = 0; c < columns; c++) {
+            xml.append("<a:gridCol w=\"2000000\"/>");
+        }
+        xml.append("</a:tblGrid>");
+        for (String row : rows) {
+            xml.append(row);
+        }
+        return xml.append("</a:tbl></a:graphicData></a:graphic></p:graphicFrame>").toString();
+    }
+
+    static String pTr(String... cells) {
+        StringBuilder xml = new StringBuilder("<a:tr h=\"320040\">");
+        for (String cell : cells) {
+            xml.append(cell);
+        }
+        return xml.append("</a:tr>").toString();
+    }
+
+    /**
+     * 普通单元格。
+     */
+    static String pTc(String text) {
+        return pTc(text, "");
+    }
+
+    /**
+     * 跨 {@code colSpan} 列合并的起始格；整行只有一个起始格时即「跨整行合并」的分组行。
+     */
+    static String pTcSpan(String text, int colSpan) {
+        return pTc(text, " gridSpan=\"" + colSpan + "\"");
+    }
+
+    /**
+     * 横向合并的延续格：自己没有内容，解析时回填起始格的值。
+     */
+    static String pTcHMergeContinue() {
+        return pTc("", " hMerge=\"1\"");
+    }
+
+    /**
+     * 纵向合并的起始格：{@code rowSpan} 写覆盖的行数。
+     */
+    static String pTcVerticalStart(String text, int rowSpan) {
+        return pTc(text, " rowSpan=\"" + rowSpan + "\"");
+    }
+
+    /**
+     * 纵向合并的延续格：自己没有内容，解析时回填起始格的值。
+     */
+    static String pTcVerticalContinue() {
+        return pTc("", " vMerge=\"1\"");
+    }
+
+    private static String pTc(String text, String attributes) {
+        return "<a:tc" + attributes + "><a:txBody><a:bodyPr/><a:lstStyle/>"
+                + "<a:p><a:r><a:rPr lang=\"zh-CN\" dirty=\"0\"/><a:t>" + escape(text) + "</a:t></a:r></a:p>"
+                + "</a:txBody><a:tcPr/></a:tc>";
     }
 
     private static String escape(String text) {

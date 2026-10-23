@@ -8,9 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Arrays.asList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Word 的边角结构测试：用 {@link TestSupport} 现场拼最小 docx（4 个部件的 OOXML 包），
@@ -87,11 +85,7 @@ class WordEdgeCasesTest {
     @Test
     void tablesNestedBeyondTheDepthLimitAreSkippedWithAWarning(@TempDir File directory) throws Exception {
         // 畸形文件里表格套表格套不完：超过上限就跳过并提示，不能让栈爆掉
-        String cell = TestSupport.tbl(1, TestSupport.tr(TestSupport.tc("最里层")));
-        for (int i = 0; i < 12; i++) {
-            cell = TestSupport.tbl(1, TestSupport.tr(TestSupport.tcInner(cell + TestSupport.emptyP())));
-        }
-        File file = TestSupport.docx(directory, "deep-table.docx", cell);
+        File file = TestSupport.docx(directory, "deep-table.docx", nestedTables(12));
 
         final Map<String, Object>[] result = holder();
         String stderr = TestSupport.captureStderr(() ->
@@ -99,6 +93,33 @@ class WordEdgeCasesTest {
 
         assertTrue(stderr.contains("表格嵌套超过"), stderr);
         assertFalse(TestSupport.tables(result[0]).isEmpty(), "外层表格照常解析，只是更深的层次被跳过");
+    }
+
+    @Test
+    void exactlyEightNestedTablesAreAllReadWithoutAWarning(@TempDir File directory) throws Exception {
+        // 上限是 8 层：第 8 层没有再套子表，是正常结束，不该报「已跳过」
+        File file = TestSupport.docx(directory, "eight-tables.docx", nestedTables(8));
+
+        final Map<String, Object>[] result = holder();
+        String stderr = TestSupport.captureStderr(() ->
+                result[0] = WordParser.parse(file.getPath(), WordParser.options()));
+
+        assertEquals("", stderr, "8 层正好在上限内，不该告警");
+        assertEquals(8, TestSupport.tables(result[0]).size(), "8 层各成一组");
+    }
+
+    @Test
+    void ninthNestedTableIsSkippedWithExactlyOneWarning(@TempDir File directory) throws Exception {
+        // 第 9 层才越界：前 8 层照常成组，第 9 层整张跳过，提示只打一次
+        File file = TestSupport.docx(directory, "nine-tables.docx", nestedTables(9));
+
+        final Map<String, Object>[] result = holder();
+        String stderr = TestSupport.captureStderr(() ->
+                result[0] = WordParser.parse(file.getPath(), WordParser.options()));
+
+        assertTrue(stderr.contains("表格嵌套超过 8 层"), stderr);
+        assertEquals(1, occurrences(stderr, "表格嵌套超过"), "同一层多个子表也只提示一次：" + stderr);
+        assertEquals(8, TestSupport.tables(result[0]).size(), "前 8 层各成一组");
     }
 
     @Test
@@ -158,6 +179,26 @@ class WordEdgeCasesTest {
         assertEquals(asList("甲", "乙"), TestSupport.values(drop, 0, 0));
     }
 
+    @Test
+    void blankFullWidthMergedRowIsNotASeparator(@TempDir File directory) throws Exception {
+        // 排版用的空白跨整行合并行不是分组小标题：当成分组行的话，紧跟它的那一行会按「分组行之后的行是表头」
+        // 被吃成表头 —— 一行数据没了、表还被切成两组。pdf 一直是这个判据（toGrid 要求整行不全空），
+        // 这条把 docx 对齐；空白行本身留成一行空值，不凭空丢内容
+        File file = TestSupport.docx(directory, "blank-full-row.docx", TestSupport.tbl(2,
+                TestSupport.tr(TestSupport.tc("列A"), TestSupport.tc("列B")),
+                TestSupport.tr(TestSupport.tc("甲"), TestSupport.tc("乙")),
+                TestSupport.tr(TestSupport.tcSpan("", 2)),
+                TestSupport.tr(TestSupport.tc("丙"), TestSupport.tc("丁"))));
+
+        Map<String, Object> result = WordParser.parse(file.getPath(), WordParser.options());
+
+        assertEquals(1, TestSupport.tables(result).size(), "空白行不该把表切成两组");
+        assertEquals(asList("列A", "列B"), TestSupport.headers(TestSupport.table(result, 0)), "丙丁不该被当成表头");
+        assertEquals(3, TestSupport.rows(TestSupport.table(result, 0)).size());
+        assertEquals(asList("", ""), TestSupport.values(result, 0, 1), "空白行留成一行空值");
+        assertEquals(asList("丙", "丁"), TestSupport.values(result, 0, 2));
+    }
+
     /* ---------------- 域 ---------------- */
 
     @Test
@@ -203,8 +244,32 @@ class WordEdgeCasesTest {
 
     /* ---------------- 小工具 ---------------- */
 
+    /**
+     * {@code levels} 层表格，每层两列一行，第一格先写自己的标签再套下一层。
+     * 每层都带自己的文字，{@code tables} 的组数才等于层数。
+     */
+    private static String nestedTables(int levels) {
+        String inner = null;
+        for (int level = levels; level >= 1; level--) {
+            String firstCell = inner == null
+                    ? TestSupport.tc("第" + level + "层")
+                    : TestSupport.tcInner(TestSupport.p("第" + level + "层") + inner + TestSupport.emptyP());
+            inner = TestSupport.tbl(2, TestSupport.tr(firstCell, TestSupport.tc("值" + level)));
+        }
+        return inner;
+    }
+
+    private static int occurrences(String text, String needle) {
+        int count = 0;
+        for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length())) {
+            count++;
+        }
+        return count;
+    }
+
+    /** 泛型数组不能直接 new，先 new 出可物化的 {@code Map<?,?>[]} 再 unchecked 转；这样 {@code -Xlint:all} 下零告警。 */
     @SuppressWarnings("unchecked")
     private static Map<String, Object>[] holder() {
-        return new Map[1];
+        return (Map<String, Object>[]) new Map<?, ?>[1];
     }
 }

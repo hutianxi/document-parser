@@ -8,9 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link PdfParser} 的功能测试，样例是 {@code src/test/resources/pdf/sales-report.pdf}
@@ -29,7 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PdfParserTest {
 
-    /** 静默模式实测：6 个表头组、45 行数据、1 张图片。 */
+    /**
+     * 静默模式实测：6 个表头组、45 行数据、1 张图片。
+     */
     private static final int SILENT_GROUPS = 6;
     private static final int SILENT_ROWS = 45;
 

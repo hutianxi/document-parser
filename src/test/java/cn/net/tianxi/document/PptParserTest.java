@@ -1,16 +1,16 @@
 package cn.net.tianxi.document;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link PptParser} 的功能测试，样例是 {@code src/test/resources/ppt/sales-report.pptx}
@@ -33,11 +33,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PptParserTest {
 
-    /** 静默模式实测：6 个表头组、22 行数据、1 张图片。 */
+    /**
+     * 静默模式实测：6 个表头组、22 行数据、1 张图片。
+     */
     private static final int SILENT_GROUPS = 6;
     private static final int SILENT_ROWS = 22;
 
-    /** 9 个文本框的文字，按形状在页面里出现的顺序。 */
+    /**
+     * 9 个文本框的文字，按形状在页面里出现的顺序。
+     */
     private static final String TEXT = String.join("\n",
             "2025年", "销售业绩", "华东大区", "回款率", "86%", "达标", "数据来源", "销售系统", "财务对账");
 
@@ -182,6 +186,47 @@ class PptParserTest {
         assertEquals(4, tickets.size());
         assertEquals(Arrays.asList("硬件故障", "42", ""), TestSupport.values(tickets.get(0)));
         assertEquals(Arrays.asList("现场支持", "15", "派工上门"), TestSupport.values(tickets.get(3)));
+    }
+
+    @Test
+    void verticallyMergedDataRowIsNotAMistakenSeparator(@TempDir File directory) throws Exception {
+        // 回归：origins 曾经只数「合并起始格」，纵向合并的延续格因此不算，这一行只剩一个格子、被当成分组小标题，
+        // KEEP 下第二行的值被抹成空串、DROP 下整行被删。判据改成只按横向延续格判定，与 docx（WordParser.Grid）
+        // 和 pdf（PdfParser.toGrid）一致 —— 同样这份表格三种格式读出来应当逐格相同
+        File file = TestSupport.pptx(directory, "vmerge.pptx", TestSupport.pTbl(2,
+                TestSupport.pTr(TestSupport.pTc("列A"), TestSupport.pTc("列B")),
+                TestSupport.pTr(TestSupport.pTcVerticalStart("第一", 2), TestSupport.pTc("值一")),
+                TestSupport.pTr(TestSupport.pTcVerticalContinue(), TestSupport.pTc("值二"))));
+
+        Map<String, Object> keep = PptParser.parse(file.getPath(), WordParser.options());
+        Map<String, Object> drop = PptParser.parse(file.getPath(),
+                WordParser.options().fullRow(WordParser.FullRow.DROP));
+
+        assertEquals(Arrays.asList("列A", "列B"), TestSupport.headers(TestSupport.table(keep, 0)));
+        assertEquals(2, TestSupport.rows(TestSupport.table(keep, 0)).size(), "两行数据都还在");
+        assertEquals(Arrays.asList("第一", "值一"), TestSupport.values(keep, 0, 0));
+        assertEquals(Arrays.asList("第一", "值二"), TestSupport.values(keep, 0, 1), "延续格回填起始格的值");
+        assertEquals(2, TestSupport.rows(TestSupport.table(drop, 0)).size(), "DROP 也不该删掉数据行");
+        assertEquals(Arrays.asList("第一", "值二"), TestSupport.values(drop, 0, 1));
+    }
+
+    @Test
+    void blankFullWidthMergedRowIsNotASeparator(@TempDir File directory) throws Exception {
+        // 与 docx／pdf 同一条判据：整行合并但一格内容都没有的空白行不是分组行，
+        // 否则紧跟它的那一行会被当成表头（一行数据没了、表还被切成两组）
+        File file = TestSupport.pptx(directory, "blank-full-row.pptx", TestSupport.pTbl(2,
+                TestSupport.pTr(TestSupport.pTc("列A"), TestSupport.pTc("列B")),
+                TestSupport.pTr(TestSupport.pTc("甲"), TestSupport.pTc("乙")),
+                TestSupport.pTr(TestSupport.pTcSpan("", 2), TestSupport.pTcHMergeContinue()),
+                TestSupport.pTr(TestSupport.pTc("丙"), TestSupport.pTc("丁"))));
+
+        Map<String, Object> result = PptParser.parse(file.getPath(), WordParser.options());
+
+        assertEquals(1, TestSupport.tables(result).size(), "空白行不该把表切成两组");
+        assertEquals(Arrays.asList("列A", "列B"), TestSupport.headers(TestSupport.table(result, 0)), "丙丁不该被当成表头");
+        assertEquals(3, TestSupport.rows(TestSupport.table(result, 0)).size());
+        assertEquals(Arrays.asList("", ""), TestSupport.values(result, 0, 1), "空白行留成一行空值");
+        assertEquals(Arrays.asList("丙", "丁"), TestSupport.values(result, 0, 2));
     }
 
     /* ---------------- FullRow 三种去向 ---------------- */

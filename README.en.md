@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/JDK-8%2B-orange.svg)](#3-tech-stack-and-requirements)
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-1.1.1-green.svg)](#17-build-and-publishing)
-[![Tests](https://img.shields.io/badge/tests-183%20passed-brightgreen.svg)](#13-testing-and-quality)
+[![Maven Central](https://img.shields.io/badge/Maven%20Central-1.2.0-green.svg)](#17-build-and-publishing)
+[![Tests](https://img.shields.io/badge/tests-242%20passed-brightgreen.svg)](#13-testing-and-quality)
 
 [中文](README.md) ｜ **English**
 
@@ -13,20 +13,23 @@
 
 | Project | Value |
 | --- | --- |
-| Maven coordinates | `cn.net.tianxi:document-parser:1.1.1` |
+| Maven coordinates | `cn.net.tianxi:document-parser:1.2.0` |
 | Java package | `cn.net.tianxi.document` |
 | Language level | Java 8 (Aspose artifacts use the `jdk16` classifier) |
 | Underlying technology | Aspose.Words / Aspose.PDF / Aspose.Slides 23.12; API and behaviour follow [docs.aspose.com](https://docs.aspose.com) |
-| Artifact | Plain library jar (`document-parser-1.1.1.jar`, 56275 bytes, 30 entries, 17 classes, includes `META-INF/LICENSE` and `META-INF/NOTICE`). No Spring container, no CLI entry point |
-| Tests | JUnit 5, 183 tests pass (1 of them is a `-Ddoc` entry point and is skipped by default) |
+| Artifact | Plain library jar — the local `mvn -B clean package` produces 60236 bytes, 30 entries, 17 classes, including `META-INF/LICENSE` and `META-INF/NOTICE`. The 1.1.1 on Maven Central is the previous 56275-byte artifact; the 1.2.0 release record is in [CHANGELOG.en.md](CHANGELOG.en.md) and §17. No Spring container, no CLI entry point |
+| Tests | JUnit 5, 242 tests pass (15 test classes; 1 of them is a `-Ddoc` entry point and is skipped by default) |
+| Changelog | [CHANGELOG.en.md](CHANGELOG.en.md) (中文: [CHANGELOG.md](CHANGELOG.md)) — what changed in each version, with the measured numbers |
 | License | [Apache License 2.0](LICENSE): free to use, modify, use commercially and redistribute, **provided the original author attribution is kept** (see [NOTICE](NOTICE)). Pull requests welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)) |
 | Repositories | GitHub [`hutianxi/document-parser`](https://github.com/hutianxi/document-parser) (primary) ｜ Gitee [`mailtianxi/document-parser`](https://gitee.com/mailtianxi/document-parser) (China mirror) |
 
-The detailed design is documented in two layers: package-level design (result shape, header-detection
-priority, licensing and evaluation mode, security boundaries) lives in
+The detailed design is documented in three layers: the overall design and implementation rationale
+(module responsibilities, data flow, header detection, per-format adapters, boundaries and trade-offs)
+lives in [DESIGN.md](DESIGN.md); package-level design (result shape, header-detection priority,
+licensing and evaluation mode, security boundaries) lives in
 [`package-info.java`](src/main/java/cn/net/tianxi/document/package-info.java); class and method detail
-lives in the javadoc of each type and shows up on hover in your IDE. This README is the index over both
-layers plus all measured data.
+lives in the javadoc of each type and shows up on hover in your IDE. This README is the index over all
+three layers plus all measured data.
 
 ---
 
@@ -91,7 +94,7 @@ These are two entirely different technical routes, so let's state the difference
 | --- | --- | --- |
 | Input precondition | Electronically native documents: docx saved by Word, pdf exported by a program, pptx saved by PowerPoint | Any page that can be turned into an image, **including scans and photos** |
 | Where the text comes from | The character data inside the file, read verbatim | Inferred from pixels, so there is a misrecognition rate |
-| Numbers and money amounts | Character-for-character identical to the original: the `合计` (total) row reads the cached field values `2096.30` / `1796.10`, asserted cell by cell across 183 tests (§11) | `0/O`, `1/l`, `8/B` and decimal points are easily confused glyph pairs; amounts usually need human review |
+| Numbers and money amounts | Character-for-character identical to the original: the `合计` (total) row reads the cached field values `2096.30` / `1796.10`, asserted cell by cell across 242 tests (§11) | `0/O`, `1/l`, `8/B` and decimal points are easily confused glyph pairs; amounts usually need human review |
 | Table structure | The **real** structure: merge flags (`gridSpan`/`vMerge`/`rowSpan`), two-row headers, tables nested inside a cell are all detected, split and back-filled | Reconstructed from rule detection; borderless tables, tables split across pages and merged cells easily lose rows or columns |
 | Reading order | Document-tree order (paragraph → table → shape), matching the author's writing order | Inferred from layout coordinates; multi-column pages and floating text boxes easily cross over |
 | Result stability | Repeated parsing of the same file yields **exactly the same result**, so it can be asserted in CI | Results change with engine version, resolution and binarisation parameters, which makes regression testing hard |
@@ -103,24 +106,39 @@ These are two entirely different technical routes, so let's state the difference
 > run the same batch of files through both and compare. The right-hand column above describes the
 > **inherent characteristics** of the OCR route, not the measured results of any product.
 
-The per-file timings for this project *are* measured (three samples, evaluation mode, no `.lic`; the same
-code ran two consecutive rounds of `mvn test` under JDK 8, and the table shows the range across the two rounds):
+The per-file timings for this project *are* measured (three samples, evaluation mode, no `.lic`; a throwaway
+probe test class ran two consecutive rounds of `mvn test` under JDK 8 and the table shows the range across
+those two rounds — the probe was deleted after the run, as always, so it is not in the repository and
+reproducing these numbers means writing one yourself):
 
 | Sample | Size | First call (includes Aspose initialisation) | Subsequent single parse |
 | --- | --- | --- | --- |
-| docx | 675208 bytes | 1460–1591 ms | 23–30 ms |
-| pdf (3 pages) | 184977 bytes | 3248–3415 ms | 664–706 ms |
-| pptx | 679289 bytes | 1138–1344 ms | 72–88 ms |
+| docx | 675208 bytes | 2058–2396 ms | 83–227 ms |
+| pdf (3 pages) | 184977 bytes | 4830–5363 ms | 671–1268 ms |
+| pptx | 679289 bytes | 934–1006 ms | 61–75 ms |
 
 Environment: JDK `1.8.0_191`, Maven 3.8.8, Windows 11. A second round under JDK 21.0.1 gave the same
-order of magnitude (first call 2004 / 3530 / 1087 ms, subsequent 33 / 573 / 69 ms). Two notes:
+order of magnitude (first call 3313 / 7360 / 2322 ms, subsequent 126–192 / 938–1655 / 86–99 ms). Three notes:
 
 - **The slow first call is a fixed cost** — each Aspose product loads its classes and initialises its
   license once per process. A long-running service (Spring bean, thread pool) operates in the
   "subsequent" column.
-- **The ~600 ms for PDF** goes into `TableAbsorber`'s geometric clustering and cross-page table merging.
-  It correlates with page count and line-segment count, not with file size — the 184977-byte pdf is an
-  order of magnitude slower than the 679289-byte pptx.
+- **The docx `source` key pays for layout construction**: building `LayoutCollector` itself costs 0 ms, but
+  the first `getStartPageIndex` call lays out the whole document — a probe measured the split (load 16–24 ms,
+  collector 0 ms, page lookups for 5 tables / 17 calls 98–131 ms). That is why the "subsequent" column moved
+  from 23–30 ms in the previous release to 83–227 ms. If you do not need the page numbers, pass
+  `Options.source(false)` and the Word side never creates a `LayoutCollector` at all: the same sample goes back
+  to **11–35 ms**. That figure comes from a throwaway probe that **alternated** on and off inside one JVM
+  (6 parses each, two rounds, deleted after the run) so the later mode could not pick up free JIT warm-up —
+  74–254 ms on versus 11–35 ms off, and in both rounds the slowest "off" parse beat the fastest "on" parse.
+  PDF and PPT already know their page number while parsing, so the switch changes nothing measurable there
+  (same rounds: pdf 681–960 vs 696–984 ms, pptx 46–86 vs 44–71 ms); it is the key that disappears, and it
+  disappears for all three formats at once (see §8).
+- **The 700–1200 ms for PDF** goes into `TableAbsorber`'s geometric clustering, cross-page table merging and
+  the **second, flow-engine pass over every page**. It correlates with page count and line-segment count, not
+  with file size — the 184977-byte pdf is an order of magnitude slower than the 679289-byte pptx. The extra
+  pass is ~1.3x the previous version: measured in one JVM on the 3-page sample, line engine alone 478 ms,
+  flow engine alone 615 ms, both 922 ms.
 
 ### 1.2 What this buys you
 
@@ -134,6 +152,10 @@ order of magnitude (first call 2004 / 3530 / 1087 ms, subsequent 33 / 573 / 69 m
   `INSERT` statements need no special handling.
 - **CI-able**: the result is deterministic, so every number in README §11 is a test assertion —
   break it and the build goes red immediately.
+- **No index counting when loading rows**: name the groups you intend to persist with
+  `Options.name("Quarterly detail")` while registering their headers, and afterwards
+  `WordParser.rowsByName(result, "Quarterly detail")` hands you exactly those rows; `source.page` tells you
+  which page of the original they came from when something has to be checked by eye.
 - **Stateless and concurrency-safe**: all three parsers are static methods with no global mutable state
   (apart from the Aspose license registration); a fully configured `Options` can be reused.
 - **Nothing leaves the process, nothing touches the network**: purely local parsing; linked images are
@@ -184,8 +206,24 @@ Scenarios that do not fit and need a different approach (each has a matching not
   back-filled with the value of the origin cell.
 - **Group sub-headings are controllable**: rows merged across the full width (e.g. "FY2025 (closed)")
   can be kept in their own group, moved to the table's first group, or dropped, via `FullRow`.
-- **PDF tables split across pages are merged back into one**: geometric clustering plus four continuation
-  criteria; a table spanning three or more pages keeps merging all the way down.
+- **PDF tables split across pages are merged back into one**: geometric clustering plus six continuation
+  criteria (adjacent pages, same column count, aligned left edges, the earlier fragment is the last block on
+  its page and the later one is the first block on its page, no header row in the later fragment; in silent
+  mode an extra "one touches the page bottom, the next touches the page top"); a table spanning three or more
+  pages keeps merging all the way down.
+- **Borderless PDF tables are recovered by a second pass**: besides the line-segment engine, each page is also
+  run through the text-flow engine, and only its "every row has the same cell count and it overlaps no ruled
+  table" findings are taken (measured: a borderless sample went from 0 groups to 3; the fully ruled repository
+  sample gained none).
+- **Every table group carries its source location**: `source.page` (docx page / pdf page / pptx slide index,
+  1-based), plus `lastPage` when the table spans a page break, so a suspicious row can be checked against the
+  original document by flipping to that page. `Options.source(false)` removes the key for all three formats at
+  once and spares docx the layout pass (§8).
+- **Registered header groups can be named**: `Options.name("Quarterly detail")` binds to the group registered
+  by the `headers(...)` call written just before it, and a group carries a `name` key only once that
+  registration actually matched; `WordParser.tablesByName(result, name)` / `rowsByName(result, name)` fetch
+  those groups (and their rows, flattened in `tables` order) by name. Unnamed groups, and groups whose header
+  came from keywords, `w:tblHeader` or the first-row fallback, keep exactly the keys they had before.
 - **Four image output modes**: metadata only (default), inline base64, write to disk while parsing,
   raw bytes; the SHA-1 content fingerprint `contentId` supports deduplication and caller-side caching.
 - **Text cleaning**: field codes are dropped and cached field results kept, soft breaks and page breaks
@@ -209,7 +247,7 @@ Scenarios that do not fit and need a different approach (each has a matching not
 Requirements:
 
 - JDK 8 or newer (the Aspose artifacts use the `jdk16` classifier and work fine on Java 8): the full test
-  suite was run under both JDK `1.8.0_191` and JDK `21.0.1`, and **all 183 tests pass with 1 skipped** on
+  suite was run under both JDK `1.8.0_191` and JDK `21.0.1`, and **all 242 tests pass with 1 skipped** on
   both, and the class files produced by both are `major version: 52` (Java 8 bytecode) — because
   `java.version=1.8` makes maven-compiler-plugin use `-source/-target 1.8`, compiling with a newer JDK
   does **not** raise the bytecode version;
@@ -228,8 +266,12 @@ document-parser/
 ├── LICENSE                                  # full Apache License 2.0 text
 ├── NOTICE                                   # original author attribution + third-party components (Aspose commercial license)
 ├── CONTRIBUTING.md                          # contribution guide: environment, conventions, PR flow, license red lines
+├── CHANGELOG.md / CHANGELOG.en.md            # release log: what changed in each version, with measured numbers
+├── DESIGN.md                                # implementation rationale: module responsibilities, data flow, header detection, per-format adapters, boundaries
 ├── docs/index.html                          # GitHub Pages project homepage
-├── .gitignore                               # target/, *.lic (private credentials), GPG signing output, IDEA project files
+├── docs/excel-parser-selection.md           # Excel parsing technology selection (measured POI / EasyExcel / FastExcel / Aspose.Cells comparison, Chinese; not shipped in the jar)
+├── docs/json-to-db.md                       # JSON-to-database example: header-signature routing, type conversion, atomic per-table writes (Chinese; not shipped in the jar)
+├── .gitignore                               # target/, *.lic (private credentials), GPG signing output, IDEA project files, Office temp files ~$*
 └── src
     ├── main/java/cn/net/tianxi/document
     │   ├── package-info.java                # package-level design notes (result shape, boundaries, licensing, security)
@@ -240,13 +282,18 @@ document-parser/
     │   ├── Images.java                      # the image collection (the only copy: numbering, fingerprinting, dedup, four modes)
     │   └── Results.java                     # shared utilities: JSON, text cleaning, watermark filtering, licensing, file-name sanitising
     └── test
-        ├── java/cn/net/tianxi/document       # 10 test classes, 183 tests (see "Testing and quality")
+        ├── java/cn/net/tianxi/document       # 15 test classes, 242 tests (see "Testing and quality")
         │   ├── TestSupport.java             # sample paths, assertion helpers, parts for building minimal docx files on the fly
         │   ├── WordParserTest.java / PdfParserTest.java / PptParserTest.java   # end-to-end assertions on the three samples
+        │   ├── PptParserTextTest.java       # text-frame line splitting: three line endings, blank paragraphs dropped (no Aspose)
         │   ├── CrossFormatTest.java         # cross-format consistency
         │   ├── TablesTest.java / ImagesTest.java / OptionsTest.java / ResultsTest.java  # unit tests of the shared components
         │   ├── WordEdgeCasesTest.java       # minimal docx built on the fly to cover edge structures
-        │   └── PrintResultTest.java         # asserts nothing, just prints parse results to the console (includes the -Ddoc entry)
+        │   ├── PdfBorderlessTableTest.java  # borderless PDF built on the fly: the flow engine as a supplement, plus its known false positive
+        │   ├── PdfCrossPageTableTest.java   # three-page PDF built on the fly: the cross-page merge chain and where it must break
+        │   ├── PdfMergedCellTableTest.java  # docx re-exported as PDF: merged cells, two-level headers, registration after the fact
+        │   ├── TableByNameTest.java         # naming registered header groups: which groups carry `name`, and looking groups/rows up by name
+        │   └── PrintResultTest.java         # asserts almost nothing, just prints parse results to the console (includes the -Ddoc entry)
         └── resources/{word,pdf,ppt}          # the three business samples (not packaged into the artifact jar)
 ```
 
@@ -255,13 +302,20 @@ the public surface is the three parser classes only.
 
 ## 5. Quick start
 
+> This README describes **1.2.0**. Compared with 1.1.1, 1.2.0 adds the `source` key, the `name` key and the
+> `tablesByName` / `rowsByName` entry points, the top-level `unmatchedHeaders` switch, and borderless-table
+> recovery in PDF. The three main keys `text` / `tables` / `images`, the `headers`-vs-row-keys contract and
+> the four image modes are unchanged from 1.1.1; the difference is that each group there has no
+> `source` / `name` key and that borderless PDF tables are not recovered in 1.1.1. None of the new content
+> exists while you stay on 1.1.1. See the 1.2.0 section of [CHANGELOG.en.md](CHANGELOG.en.md) and §17.
+
 ### 5.1 Add the dependency
 
 ```xml
 <dependency>
     <groupId>cn.net.tianxi</groupId>
     <artifactId>document-parser</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
@@ -281,16 +335,36 @@ the parser runs in "silent mode", where the first row of each table may be used 
 
 ### 5.3 Common examples
 
+The header and keyword literals below are written in English so they read naturally; **the three bundled
+samples are Chinese documents**, so if you want to run these snippets against
+`src/test/resources/word/sales-report.docx` (or the pdf / pptx of the same source), use the literals the
+parser actually reads: `片区` district, `区域` region, `销售额` sales, `回款率` collection rate, `备注` remark,
+`客户名称` customer name, `合同金额` contract amount, `已回款` collected, `季度明细` quarterly detail,
+`回款台账` collection ledger, keyword `销售`. `PrintResultTest` prints the real headers of every group, which
+is the quickest way to copy them.
+
 ```java
 // Register complete headers (most stable across pages and formats) and drop group sub-heading rows
 WordParser.Options options = WordParser.options()
         .headers("district", "region", "sales", "collection rate", "sales", "collection rate", "remark")  // one group; you may register several
+        .name("Quarterly detail")              // binds to the headers(...) call written just before it
         .headers("customer", "contract amount", "collected", "collection rate", "remark")
+        .name("Collection ledger")
         .headerTolerance(1)                          // allow 1 mismatching column (0 = exact per column), default 1
         .fullRow(WordParser.FullRow.DROP)            // drop rows merged across the full width
         .keywords("sales");                          // optional loose fallback
 
 Map<String, Object> result = PdfParser.parse("D:/a.pdf", options);
+```
+
+```java
+// Persisting: only the tables you load need a name; fetch them by name instead of counting tables indices
+List<Map<String, Object>> tables = WordParser.tablesByName(result, "Quarterly detail");
+List<String> columns = (List<String>) tables.get(0).get("headers");   // use this as the column list
+for (Map<String, String> row : WordParser.rowsByName(result, "Quarterly detail")) {
+    // the keys of each row equal that group's headers item by item; same-named groups are flattened in order
+}
+// a named group carries one extra key: { "headers": [...], "rows": [...], "name": "Quarterly detail", "source": {"page":1} }
 ```
 
 ```java
@@ -314,12 +388,17 @@ If you would rather look at what a document parses into than write code, run the
 `PrintResultTest` (**asserts nothing, just prints**):
 
 ```
-mvn -B test -Dtest=PrintResultTest                                              # one printout per sample
+mvn -B test -Dtest=PrintResultTest                                              # all 18 reports
+mvn -B test -Dtest=PrintResultTest#printAllSamplesWithRegisteredNames            # what the registered-and-named option set produces on all three samples
+mvn -B test -Dtest=PrintResultTest#printAllModeJson                              # the full JSON of all three formats under 7 option sets, plus 21 .json files
+mvn -B test -Dtest=PrintResultTest#printNamedMatchesAcrossFormats                # which groups each name hits and which rows you get back
+mvn -B test -Dtest=PrintResultTest#printPublicApiOverloads                       # the four parse overloads side by side (path/stream × options/keywords)
 mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/your-file.docx"    # your own document
 ```
 
-The console shows the body text paragraph by paragraph, the headers and every data row of each table
-group, the image metadata and the complete JSON, and also writes a UTF-8 copy into `target/print/`.
+The console shows the body text paragraph by paragraph, each table group's registered name (only when one
+was given) and source page, its headers and every data row, the image metadata and the complete JSON,
+and also writes a UTF-8 copy into `target/print/`.
 Sample output and details are in [13. Testing and quality](#13-testing-and-quality).
 
 ## 6. API
@@ -335,9 +414,16 @@ The public methods of the three parsers correspond exactly (`XxxParser` = `WordP
 | `static String toJson(Object value)` | Serialise the result to indented JSON |
 | `static void writeImages(Map<String,Object> result, File directory)` | Write the images of a `BASE64`-mode result to files |
 | `static WordParser.Options options()` (`WordParser` only) | Create an options object, shared by all three formats |
+| `static List<Map<String,Object>> tablesByName(Map<String,Object> result, String name)` (`WordParser` only) | Fetch the table groups whose `name` equals `name`, in `tables` order and as the very objects inside the result; an empty list when nothing matches |
+| `static List<Map<String,String>> rowsByName(Map<String,Object> result, String name)` (`WordParser` only) | The data rows of those groups flattened in the same order, ready to insert row by row; an empty list when nothing matches |
 
-Chained methods on `WordParser.Options`: `headers(String...)`, `headerGroups(List<List<String>>)`,
-`headerTolerance(int)`, `keywords(String...)`, `fullRow(FullRow)`, `images(ImageMode)`, `imageDir(File)`.
+Neither lookup parses anything or throws: a `null` result, a `null` name or a blank name all give an empty
+list. The query string is trimmed at both ends; inner spaces and case are significant (a name is something
+the caller chose, so the lookup does not guess the way header matching does).
+
+Chained methods on `WordParser.Options`: `headers(String...)`, `name(String)`, `headerGroups(List<List<String>>)`,
+`headerTolerance(int)`, `keywords(String...)`, `fullRow(FullRow)`, `images(ImageMode)`, `imageDir(File)`,
+`source(boolean)`.
 Two enums: `WordParser.FullRow` (`KEEP` / `FIRST` / `DROP`) and `WordParser.ImageMode`
 (`BASE64` / `FILE` / `BYTES` / `META`).
 
@@ -356,8 +442,8 @@ Below is the **measured output** for `src/test/resources/word/sales-report.docx`
   "tables": [
     { "headers": ["district", "region", "sales", "collection rate", "sales-5", "collection rate-6", "remark"],
       "rows": [ { "district": "East China", "region": "Shanghai", "sales": "1280", "collection rate": "92%",
-                  "sales-5": "1465", "collection rate-6": "95%", "remark": "target exceeded" } ] }
-    }
+                  "sales-5": "1465", "collection rate-6": "95%", "remark": "target exceeded" } ],
+      "source": { "page": 1 } }
   ],
   "images": [
     { "fileName": "image-1.png", "type": "PNG", "width": 1024, "height": 768,
@@ -406,11 +492,48 @@ contains only the rows belonging to the header above them.
 - **Contract**: `headers` equals the keys of every row **item by item** (same order, same count), and the
   row objects are `LinkedHashMap`, so you can read values in column order. `CrossFormatTest` checked this
   across 3 samples × 4 option sets = 12 parses, with 0 mismatches.
+- **Source location `source`**: each group carries one more key — `{ "page": startPage }`, plus `"lastPage"`
+  when the table spans a page break (in the samples it is the collection ledger, one in docx and one in pdf,
+  both `{"page": 1, "lastPage": 2}`). All three formats share the key name and the field: docx takes the page number
+  from `LayoutCollector`, pdf takes the page number, pptx takes the slide index — all 1-based, so you can flip
+  straight to that page to check the original. Groups cut out of one physical table all carry the same page
+  range (groups are split by header, not by page). When a format cannot give a position the key is omitted
+  entirely (measured: every group in all three samples has one, so that branch has never been taken).
+  If you do not want the key at all, `Options.source(false)` switches it off for **all three formats together**:
+  each group then carries just `headers` and `rows` with names and content otherwise unchanged, and the Word
+  side skips `LayoutCollector` entirely (timings in §8; guarded by
+  `CrossFormatTest.sourceSwitchOffDropsTheKeyFromAllThreeFormats`).
+- **Registered name `name`**: written only when all three things hold — the group's headers were registered,
+  the registration carried a name, and that registration actually matched in this document — and it is
+  written after `rows`:
+
+  ```json
+  { "headers": ["district", "region", "sales", "collection rate", "sales-5", "collection rate-6", "remark"],
+    "rows": [ … ],
+    "name": "Quarterly detail",
+    "source": { "page": 1 } }
+  ```
+
+  The default silent output therefore contains no `name` at all (the JSON at the top of §7 is that case —
+  4740 characters in its real, Chinese form).
+  With the sample registration that names three of five groups (`TestSupport.named()`), the measured JSON
+  lengths go from 4740 → **4828** (docx, groups 1, 2, 6, 7 named), 6473 → **6561** (pdf, groups 1, 2, 5, 6) and
+  3378 → **3466** (pptx, groups 1, 2, 4, 5). The docx ledger group is named too: after merging a multi-level
+  header the grouping algorithm compares the *merged* row against the registrations once more, so registering
+  that merged row hits (all five registrations hit on docx; stderr is empty — the pdf/pptx differences are in
+  §8). Fetching is
+  `WordParser.tablesByName(result, "Quarterly detail")` (groups in `tables` order) or
+  `WordParser.rowsByName(result, "Quarterly detail")` (their rows flattened, one list to insert). `name` is
+  not a primary key: the two header groups cut out of one physical table carry the *same* name (measured:
+  docx groups 6 and 7). For database import, route on the headers themselves (for example
+  `ObjectMapper.writeValueAsString(headers)`) rather than on `name`; a complete worked example — header
+  signature routing, type conversion (empty strings, `86%`, thousands separators) and atomic per-table
+  writes — is in [docs/json-to-db.md](docs/json-to-db.md) (Chinese).
 - **Tables nested inside a Word cell**: the child table does not go into the host cell's text (that cell
   stays empty); it appears as an **extra element** in `tables`, so neither side loses its row/column
   structure. Measured on the sample: the host table is `["ticket type","ticket count","handling notes"]`
   (the cell in question is `["hardware fault","42",""]`) and the child table is a separate group
-  `["faulty part","ticket count"]` with 3 rows.
+  `["faulty part","ticket count"]` with 3 rows, whose `source` is the same page 2 as its host.
 
 ### 7.3 `images`
 
@@ -445,7 +568,7 @@ A few points:
   mismatched combination also prints a hint.
 
 Keep the size in mind (measured on the three samples, see "Measured baselines"): that docx has one image,
-and the whole META-mode result is 4409 characters versus 899039 characters in BASE64 mode — the 670939-byte
+and the whole META-mode result is 4740 characters versus 899370 characters in BASE64 mode — the 670939-byte
 PNG encodes to 894610 characters, which is 99.5% of it.
 
 ## 8. Options
@@ -455,12 +578,14 @@ PNG encodes to 894610 characters, which is 99.5% of it.
 | Option | Default | Meaning and measured effect |
 | --- | --- | --- |
 | `headers(String...)` | not registered | Register one complete header group (call repeatedly to register several). On a match, the registered names are used. Measured on the samples: after registering 5 real header groups, the docx and pdf JSON is **byte-for-byte identical** to silent mode, while pptx goes from 22 rows to 21 (the lower header row is no longer treated as data). Trailing empty columns of the document row are **trimmed before comparison**, so a table whose last column has no title (the docx target table) matches when you register only the first 3 names, and the 4th column is still filled as `Column 4`; do not let your own registered group end with an empty name, or it will never match |
-| `headerGroups(List<List<String>>)` | empty | Batch registration, equivalent to calling `headers(...)` several times |
+| `headerGroups(List<List<String>>)` | empty | Batch registration, equivalent to calling `headers(...)` several times. Note that it *is* registering group by group internally, so a `name(...)` written right after a batch binds to the **last group of that batch**; to name several groups use the `headers(...).name(...)` spelling |
+| `name(String)` | no name | Names **the group registered by the `headers(...)` call written just before it**; on a match that group carries a `name` key (see §7). Practical recipe: run `PrintResultTest`, copy the `headers` of the groups you want to persist into `.headers(...).name("...")`, then read them back with `WordParser.rowsByName(result, "...")`. Four things to keep in mind: ① only groups that matched a registration get the key — anything detected via keywords, `w:tblHeader`, the group-row rule or the first-row fallback does not; ② one name can match several groups (they all come back from `tablesByName`, in `tables` order), so it is not a primary key; ③ matching follows `headerTolerance`, so a loosened tolerance can also make a name land on the wrong row — tighten it to `headerTolerance(0)`; ④ for two-row headers the three formats expose different grid rows, so one registration may match in pdf/pptx and miss in docx — register both spellings under **the same name** (`TestSupport.namedBothHeaderRows()`; measured: still 30/45/21 rows). Leading and trailing spaces in the name are trimmed, an empty or null name means "unnamed", calling it before any registration prints a hint on stderr and is ignored, and renaming a group is a contract change for whatever reads it by name |
 | `headerTolerance(int)` | 1 | How many columns may mismatch during header comparison; 0 = exact per column. Whatever the value, at least one column must match exactly and the column count must be equal; negatives are clamped to 0 |
 | `keywords(String...)` | none | Loose fallback: a row is a header row only if **every non-empty cell contains one of the keywords**. Null and blank entries are ignored |
 | `fullRow(FullRow)` | `KEEP` | Where rows merged across the full width (group sub-headings) go: `KEEP` puts them in the nearest header group above, `FIRST` puts them in the physical table's first group, `DROP` discards them. Measured on docx: KEEP 7 groups / 30 rows, FIRST the same counts with only ownership changed, DROP 6 groups / 28 rows |
 | `images(ImageMode)` | `META` | See 7.3 |
 | `imageDir(File)` | null | Only effective in `FILE` mode; `FILE` without it throws `IllegalStateException` when the first image is reached, and setting it without `FILE` prints a hint on stderr |
+| `source(boolean)` | `true` | Whether every group carries `source` (see §7). **All three formats switch together.** Off, the docx side never creates a `LayoutCollector`, so no layout pass is paid for: the same sample measured 74–254 ms on versus **11–35 ms off** with an on/off-alternating throwaway probe in one JVM. PDF and PPT get their page number for free, so the switch only decides whether the key is written (same rounds: pdf 681–960 vs 696–984 ms, pptx 46–86 vs 44–71 ms — overlapping ranges) |
 
 **Silent mode** (`isSilent()`: neither headers nor keywords given) turns on the "first-row fallback" and
 is good for a first look at an unknown document; register headers when you want stable ingestion.
@@ -474,7 +599,7 @@ via `Images.uniqueFile` instead of overwriting each other.
 | Format | Read into the result | Not read (known out of scope) |
 | --- | --- | --- |
 | Word | Paragraphs, tables and images in each section's Body; text-box text; paragraphs and tables wrapped in block-level content controls (`w:sdt`); list items (bullets do not enter the text); the **cached result** of fields (`SUM(ABOVE)` and `PAGE` both read the cached value) | Headers, footers, footnotes, endnotes, comments; field codes are always dropped and no layout computation is done, so a field that was never computed is empty; an unfilled content control does not emit the placeholder text `Click here to enter text.` (4 spellings measured, see below) |
-| PDF | Tables with drawn borders (geometric reconstruction), text-layer paragraphs, bitmaps; a long table split across pages is merged back into one (criteria: adjacent pages + same column count + aligned left edges + no header row found in the later fragment; when no header evidence is registered, that last criterion is replaced by the geometric evidence "one fragment touches the page bottom, the next touches the page top"); rows cut into several blocks by a vertical merge are clustered back into the same table by rectangle adjacency | **Tables without drawn borders** (background colour or whitespace alignment only) are treated as ordinary paragraphs and land in `text`; scans / image-only PDFs need OCR; when no header evidence is registered and the row cut by the page break is unusually tall (its bottom edge more than 1/5 of the page height above the page bottom), continuation is not recognised and the table splits into two groups, each with its own header |
+| PDF | Tables with drawn borders (geometric reconstruction), text-layer paragraphs, bitmaps; a long table split across pages is merged back into one (criteria: adjacent pages + same column count + aligned left edges + the earlier fragment is the last block on its page and the later one is the first block on its page + no header row found in the later fragment; in silent mode, where no header evidence is available, the geometric evidence "one fragment touches the page bottom, the next touches the page top" is required as well); rows cut into several blocks by a vertical merge are clustered back into the same table by rectangle adjacency; **besides the ruled tables, the text-flow engine is run as a second pass** that only accepts borderless candidates which are "every row has the same cell count and overlap no ruled table" (measured: a borderless sample went from 0 groups to 3, and `sales-report.pdf` gained none — see below) | Borderless tables are only recovered when **every row has the same number of cells**; ragged ones (a full-width title row on top, for instance) still land in `text`; the false positive that comes with the second pass: prose aligned with tab stops reads as a table (measured, see below); scans / image-only PDFs need OCR; when no header evidence is registered and the row cut by the page break is unusually tall (its bottom edge more than 1/5 of the page height above the page bottom), continuation is not recognised and the table splits into two groups, each with its own header |
 | PPT | Shape text, tables and images on the body slides (group shapes expanded recursively, up to 32 levels; `VideoFrame` extends `PictureFrame`, so video frames take the picture path and what lands in `images` is their poster frame) | Speaker notes / masters / layout-slide text, text inside SmartArt graphics, chart data, content of embedded OLE objects (Excel sheets / Word documents), shape fill backgrounds, the video content itself |
 
 Several boundaries confirmed by measurement:
@@ -493,6 +618,19 @@ Several boundaries confirmed by measurement:
   (`["Total","","","86%",""]`, `PdfParserTest.exportedPdfLosesTheCachedSumFieldResult`). The docx sample
   in the repository has a 12-customer ledger whose total row reads the cached values
   `2096.30` / `1796.10` / `86%`. **Use the docx for money amounts.**
+- **Borderless PDF tables: recovered, but only as a supplement**. A throwaway probe (deleted after the run;
+  the same layout is now pinned by `PdfBorderlessTableTest`) compared the two `TableAbsorber` engines on three
+  synthetic files: on a Word-exported page holding a borderless 5×3 table next to a ruled 5×3 table, the default
+  (line-segment) engine found 1 table and the flow engine found 3; on a page of scattered text plus a borderless
+  table the default found 0 and the flow engine found 3. Flipping the switch globally, however, corrupted the
+  fully ruled repository sample — 8 blocks became 5 tables with merged rows shifted one column left, an empty
+  phantom column in the target table and the nested table's row in the wrong place (2 of 35 and 12 of 38 cell
+  rectangles reported as invalid). So the flow engine never replaces the line engine; it only contributes
+  candidates that (a) overlap no ruled table and (b) have ≥2 rows, ≥2 columns and the same cell count in every
+  row. On the repository sample those two filters reject all 5 flow candidates, so the result is unchanged;
+  the price is that on a page mixing a ruled and a borderless table only the borderless one can be added.
+  Known false positive, written into an assertion: four tab-aligned rows of prose satisfy both filters and move
+  from `text` into `tables` (`PdfBorderlessTableTest.tabAlignedParagraphsCurrentlyCountAsATable`).
 - **For PPT two-row headers, register the headers**: in silent mode the lower header row is treated as
   data — measured 8 rows with column names
   `["customer","collection status","collection status-3","collection rate","remark"]`; after registering
@@ -539,18 +677,39 @@ Each of the four tables stresses one structure (same source in all three formats
 ## 11. Measured baselines
 
 Environment: Maven 3.8.8, Windows 11, **no `.lic` at all**, so all three parsers run in evaluation mode;
-the full suite was run under JDK `1.8.0_191` and JDK `21.0.1`, and both gave 183 tests passing with
+the full suite was run under JDK `1.8.0_191` and JDK `21.0.1`, and both gave 242 tests passing with
 1 skipped. Every number below is an assertion value in the current tests and can be reproduced with
-`mvn -B clean test` (whole-round duration measured at 30.8 s on JDK 8 and 35.2 s on JDK 21; with or
-without `-DargLine="-Dfile.encoding=UTF-8"` it is 183/183 either way — that flag only affects the Chinese
-encoding in the console and the reports). Per-file parse timings are in
+`mvn -B clean test` (whole-round duration of the 1.2.0 release build: `clean package` — compile, test and
+jar — took **02:10** on JDK 8 and **02:17** on JDK 21; it is 242/242 with or without
+`-DargLine="-Dfile.encoding=UTF-8"`, which only affects the Chinese encoding in the console and the reports.
+The jar size depends on the JDK: **60236** bytes on JDK 8, **60650** on JDK 21).
+
+**Do not treat the whole-round duration as a performance figure.** The 1.2.0 release build measured 02:10 and
+02:17, while an idle round of the same code measured 01:25 and 01:32; even earlier the same command reached
+**02:15–02:37** when another process was competing for CPU — nearly double. The only cost that can be attributed precisely is the per-method
+timing in the surefire report: `CrossFormatTest.documentedJsonLengthsAreTheRealOnes`, which turns the
+**12 JSON lengths** in this section (silent, registered-without-names, registered-with-names, BASE64 — four
+settings × three formats) into assertions and therefore parses **12 more times**, measured **3.9 s on JDK 21 in
+this round** (2.7–3.8 s in earlier JDK 8 runs; from `target/surefire-reports/TEST-*.xml`). An earlier revision claimed that this one assertion
+made the round 80 s slower and the class go from 31.5 s to 76.5 s; that comparison put a contended round next
+to an idle one and **does not reproduce** — running the class three times with the assertion and three times
+without it, alternating, shows the difference is entirely round-to-round noise. The claim has been retracted;
+the payoff is unchanged:
+every length quoted in the documentation can now be falsified by `mvn test`. Per-file parse timings are in
 [§1.1](#11-how-this-differs-from-ocr-it-reads-the-text-layer-it-does-not-guess-pixels).
 
 | Sample | `text` | Header groups | Data rows | Images | META result length | BASE64 result length |
 | --- | --- | --- | --- | --- | --- | --- |
-| docx | 13 paragraphs | 7 | 30 | 1 PNG 1024×768, 670939 bytes | 4409 chars | 899039 chars |
-| pdf | empty string (all body text is inside tables) | 6 | 45 | 1 JPEG 699×524, 38668 bytes | 6186 chars | 57789 chars |
-| pptx | 9 lines (each ≤5 characters) | 6 | 22 | 1 PNG 1024×768, 670939 bytes | 3262 chars | 897892 chars |
+| docx | 13 paragraphs | 7 | 30 | 1 PNG 1024×768, 670939 bytes | 4740 chars | 899370 chars |
+| pdf | empty string (all body text is inside tables) | 6 | 45 | 1 JPEG 699×524, 38668 bytes | 6473 chars | 58076 chars |
+| pptx | 9 lines (each ≤5 characters) | 6 | 22 | 1 PNG 1024×768, 670939 bytes | 3526 chars | 898156 chars |
+
+(The lengths grew by 331 / 287 / 264 characters versus the previous release, all of it the new `source` key:
+docx has 7 groups, pdf and pptx 6 each, and every group carries a `"source" : { "page" : N }` — 44 characters;
+**the ledgers in both docx and pdf span a page break** and so carry one extra `lastPage` each, 23 more
+characters, which gives `7 × 44 + 23 = 331` for docx. The three deltas are reproducible: pull the `1.1.1` main
+jar from Maven Central, run the same samples in META mode and you get **4409 / 6186 / 3262**; subtract those from
+the table above and you get 331 / 287 / 264.)
 
 Group and row counts for the same samples under different options (also assertion values):
 
@@ -560,6 +719,7 @@ Group and row counts for the same samples under different options (also assertio
 | 5 real header groups registered | 7 groups / 30 rows, JSON byte-identical to silent | 6 groups / 45 rows, JSON byte-identical to silent | 6 groups / **21** rows (the lower header row is no longer data) |
 | Registered headers + `DROP` | 6 groups / 28 rows | 5 groups / 43 rows | 5 groups / 19 rows |
 | `FIRST` (nothing registered) | 7 groups / 30 rows, only the group rows move to the table's first group | 6 groups / 45 rows, same | 6 groups / 22 rows, same |
+| 5 groups registered, 3 of them named (`TestSupport.named()`) | 7 groups / 30 rows, groups 1, 2, 6, 7 carry `name`, 4740 → **4828** chars | 6 groups / 45 rows, groups 1, 2, 5, 6 carry `name`, 6473 → **6561** chars | 6 groups / 21 rows, groups 1, 2, 4, 5 carry `name`, 3378 → **3466** chars |
 
 The core table (quarterly sales detail) of the three samples is **identical cell by cell** across the three
 formats and in both silent and registered modes: column names
@@ -573,7 +733,7 @@ boundary when they were built — not because parsing lost rows.
 | Behaviour | Measured result | Test |
 | --- | --- | --- |
 | Same-named columns get a column-number suffix | The second occurrence of `sales` / `collection rate` → `sales-5` / `collection rate-6`, with `headers` equal to the row keys item by item | `WordParserTest.sameNamedColumnsGetColumnNumberSuffix` |
-| Vertical merges back-filled | The two rows of the `district` column have no content of their own and read `East China` / `South East China`; all 4 data rows are present and none is mistaken for a group row | `WordParserTest.verticallyMergedColumnIsFilledFromItsOriginRow`, `WordEdgeCasesTest.verticallyMergedDataRowIsNotAMistakenSeparator` |
+| Vertical merges back-filled | The two rows of the `district` column have no content of their own and read `East China` / `South East China`; all 4 data rows are present and none is mistaken for a group row | `WordParserTest.verticallyMergedColumnIsFilledFromItsOriginRow`, `WordEdgeCasesTest.verticallyMergedDataRowIsNotAMistakenSeparator`, `PptParserTest.verticallyMergedDataRowIsNotAMistakenSeparator` |
 | Two-row headers merged | Blank columns in the lower row inherit the upper name → `["customer","contract amount","collected","collection rate","remark"]` | `WordParserTest.twoLevelHeaderInheritsUpperLevelColumnNames`, `TablesTest.consecutiveHeaderRowsMergeIntoOneMultiLevelHeader` |
 | Field results | The `Total` row reads Word's cached `SUM(ABOVE)` results `2096.30` / `1796.10` / `86%`; in the body the cached value `3` of the `PAGE` field is kept while the field code is dropped; a never-computed `DOCPROPERTY` disappears entirely, leaving `Archive no.:` | `WordParserTest.sumFieldResultIsReadFromTheCachedValue`, `WordEdgeCasesTest.calculatedFieldResultSurvivesInsideACell` |
 | Soft breaks | Shift+Enter becomes a space: `…tax-inclusive sales. Data source: …` (the longest paragraph, 62 characters, is read in full — evaluation mode does not truncate Words' body text) | `WordParserTest.textJoinsSoftBreakLinesWithASpace` |
@@ -582,14 +742,21 @@ boundary when they were built — not because parsing lost rows.
 | Table nested in a cell | `tables` 1 → 2 groups: the host cell is empty (`["hardware fault","42",""]`) and the child table is its own group `["faulty part","ticket count"]` with 3 rows | `WordParserTest.nestedTableBecomesItsOwnGroupAndLeavesTheHostCellClean` |
 | Three destinations for group rows | KEEP stays in its own group, FIRST moves to the table's first group (counts unchanged, only ownership), DROP discards the row entirely (docx 7→6 groups, 30→28 rows); **the row immediately after a group row is treated as a header** | Six cases in `TablesTest` (`separatorRow*` / `fullRow*` / `rowAfterASeparatorRowIsTreatedAsAHeader`) plus one per parser |
 | A group row before any header | Starts a new group with columns filled as `Column 1..Column 4`, and the group text is not lost (docx group 4, pdf group 3, pptx group 2 are all of this kind) | `TablesTest.separatorRowBeforeAnyHeaderStartsANumberedGroup` plus one per parser |
+| A blank row merged across the full width is not a group row | On a 4-row 2-column table assembled on the fly (header / `A B` / blank merged row / `C D`): 1 group, column names `colA` / `colB`, 3 data rows, and the blank row kept as one row of empty values. Before the fix the same file measured 2 groups, the second named after the data `C` / `D` with 0 data rows (the `C D` row was lost). One and the same rule in all three formats | `WordEdgeCasesTest.blankFullWidthMergedRowIsNotASeparator`, `PptParserTest.blankFullWidthMergedRowIsNotASeparator` (pdf always had it, see `PdfParser.toGrid`) |
 | PDF table split across pages | The 31-row ledger merges back into one group: page 1 is drawn down to `Taizhou Pharma City` (row 20), page 2 continues from `Huzhou Building Materials` (row 21), and `Total` is last | `PdfParserTest.ledgerSplitAcrossTwoPagesIsMergedBackIntoOneGroup`, `CrossFormatTest.onlyPdfNeedsTheCrossPageMerge` |
 | PDF vertical merges cut into blocks | The two rows of the core table and the "hardware fault 12" row of the ticket table were cut into independent small blocks by the absorber; after clustering they are still 4 rows | `PdfParserTest.coreTableRowsCutByVerticalMergeAreClusteredBack`, `PdfParserTest.ticketTableKeepsTheRowThatWasCutIntoItsOwnBlock` |
 | Registering headers switches off the first-row fallback | PDF has no `tblHeader` flag to rely on: in silent mode the first row is a header, but once header evidence is registered, the first row of a non-matching table is a data row and columns are filled as `Column N` (the core table has 5 rows = header row + 4 data rows) | `PdfParserTest.registeringHeaderEvidenceTurnsOffTheFirstRowFallback`, `TablesTest.firstRowStaysADataRowOnceHeaderEvidenceIsRegistered` |
 | Registered names override names read from the document | Default tolerance is 1 mismatching column: registering `remark` as `notes` still matches, and the result uses the registered `notes` (PDF cell text gains spaces from line wrapping, so comparison ignores spaces) | `WordParserTest.registeredHeadersOverrideTheNamesReadFromTheDocument`, `TablesTest.registeredHeadersOverrideTheNamesReadFromTheGrid` |
-| Unmatched registered headers are reported | stderr shows `header set did not match any row` plus that group's column names; on PDF/PPT the reported group is `faulty part` (that nested table does not exist in those formats), on Word it is `customer` (after the two-row header is flattened, the column count differs from the registered single row of 5) | One `unmatchedHeaderGroupIsReportedOnStderr` per parser |
+| Unmatched registered headers are reported | stderr shows `header set did not match any row` plus that group's column names; on PDF/PPT the reported group is `faulty part` (that nested table does not exist in those formats), while Word reports **nothing** (all five `named()` registrations hit and stderr is empty). **A registration covered by a same-name match is no longer reported** — once both spellings of a two-row header are registered under one `name`, the one that is bound to miss stops making noise; registrations without a name are unaffected | One `unmatchedHeaderGroupIsReportedOnStderr` per parser, `TableByNameTest.aRegistrationCoveredByASameNameMatchIsNoLongerReportedOnStderr` |
+| Every group carries a `source` page | docx: core table page 1, ledger `{"page":1,"lastPage":2}`, the other 5 groups page 2 (the nested child table shares its host's page); pdf: first two groups page 1 (the ledger runs onto page 2), tickets page 2, last three page 3; pptx: `page` is the slide index 1／2／3. Groups cut from one physical table share the same page range | `CrossFormatTest.sourceRecordsThePageEachBlockStartsOn` |
+| `source(false)` switches the key off for all three formats | Off, every group carries just `headers` and `rows` — the key set is asserted to be exactly those two — and column names and cell content come out identical to the default; docx therefore never builds a `LayoutCollector` (on/off alternating in one JVM: 11–35 ms off vs 74–254 ms on) | `CrossFormatTest.sourceSwitchOffDropsTheKeyFromAllThreeFormats`, `OptionsTest.sourceIsWrittenByDefaultAndCanBeSwitchedOff` |
+| A registered name is written as `name` | Only the groups whose registration carried a name get the key, and the key order is fixed as `headers` → `rows` → `name` → `source` (with `source(false)` the key set is `[headers, rows, name]`). Groups cut from one physical table carry the **same** name (measured: docx groups 6 and 7), and `rowsByName` flattens their 5 rows in group order, returning the very row objects inside the result. `tablesByName` / `rowsByName` return an empty list for an unknown, blank or null name, and trim the query's outer spaces | `TableByNameTest` (11 tests), `TablesTest.aRegisteredNameIsWrittenOnlyOnTheGroupsThatMatched`, `OptionsTest.nameBindsToTheGroupRegisteredJustBeforeIt` |
+| Which spelling of a multi-level header is registered (cross-format difference) | Registering the *merged* row (`customer / contract amount / collected / collection rate / remark`): all three formats hit, even at tolerance 0, with ledger rows docx 13 / pdf 31 / pptx 7. Registering the *upper* row: docx hits (13 rows — both header rows carry `w:tblHeader`, so they still merge), pptx hits but its lower row leaks into the data (7 → 8 rows), and pdf misses (its grid only offers the merged row; stderr reports it once). For one registration shared across formats, register both spellings under the same name: all three samples carry the `name` and the group/row counts stay unchanged (30 / 45 / 21) | `TableByNameTest.aMultiLevelHeaderHitsByItsMergedRowInAllThreeFormats`, `TableByNameTest.aRegistrationCoveredByASameNameMatchIsNoLongerReportedOnStderr` |
+| Borderless PDF tables are recovered | Measured with a throwaway probe (deleted after the run; `PdfBorderlessTableTest` now pins the same layout): a Word-exported page with a borderless 5×3 table next to a ruled one yielded 1 table with the default engine and 3 with the flow engine; **switching globally** corrupted the fully ruled repository sample (8 blocks into 5 tables, merged rows shifted left, a phantom empty column, the nested row in the wrong place — 2 of 35 and 12 of 38 cell rectangles invalid), so only candidates that are uniform-row and overlap-free are accepted, which rejects all 5 flow candidates on the repository sample and leaves its result unchanged | `PdfBorderlessTableTest.borderlessTableIsRecoveredAsAThreeColumnGrid`, `ruledTableOnTheSamePageIsUnaffected`, `nothingElseBecomesATable` |
+| Tab-aligned prose counts as a table | The known false positive of that second pass: 4 rows × 3 columns of body text laid out with tab stops satisfies both filters, so that text moves from `text` into `tables`. The assertion exists precisely to pin the behaviour — change it by changing the test | `PdfBorderlessTableTest.tabAlignedParagraphsCurrentlyCountAsATable` |
 | The PPT two-row-header trade-off | Silent: 8 rows with column names `["customer","collection status","collection status-3","collection rate","remark"]`; with registered headers: 7 rows — this is the reason for "register headers for PPT" | `PptParserTest.silentModeCannotMergeTheTwoLevelHeader`, `registeredHeadersMergeTheTwoLevelHeader` |
 | PPT group shapes | The three text boxes `data source` / `sales system` / `finance reconciliation` sit inside one group shape and are only reachable by recursing into it | `PptParserTest.recursesIntoGroupShapes` |
-| Four image modes | META gives metadata only; BASE64 gives a data URI (decoding it back yields 670939 bytes, identical to the original image); BYTES gives the raw bytes; FILE writes to disk and gives an absolute path, adding exactly one file to the directory; FILE without `imageDir` throws `IllegalStateException`; META with `imageDir` prints a hint on stderr and writes nothing | The 7 image cases in `WordParserTest` + 24 in `ImagesTest` |
+| Four image modes | META gives metadata only; BASE64 gives a data URI (decoding it back yields 670939 bytes, identical to the original image); BYTES gives the raw bytes; FILE writes to disk and gives an absolute path, adding exactly one file to the directory; FILE without `imageDir` throws `IllegalStateException`; META with `imageDir` prints a hint on stderr and adds no new file | The 7 image cases in `WordParserTest` + 25 in `ImagesTest` |
 | Recursion depth limits | 12 nested tables → `table nesting exceeds` on stderr, the outer table still parses normally; 20 nested controls → `node nesting exceeds`, that whole branch is skipped | `WordEdgeCasesTest.tablesNestedBeyondTheDepthLimitAreSkippedWithAWarning`, `containersNestedBeyondTheDepthLimitAreSkippedWithAWarning` |
 | Result contract | 3 samples × 4 option sets = 12 parses, with **0** places where `headers` disagrees with a row's keys, and image metadata complete | `CrossFormatTest.contractHoldsForEverySampleAndMode` and 3 more + `everyOptionCombinationKeepsTheContract` per parser |
 
@@ -678,47 +845,94 @@ prove Words does not truncate body text.
 
 ## 13. Testing and quality
 
-`mvn -B clean test` (`JAVA_HOME` pointing at JDK 8) runs **183 tests in 10 test classes** (0 failures,
+`mvn -B clean test` (`JAVA_HOME` pointing at JDK 8) runs **242 tests in 15 test classes** (0 failures,
 1 skipped — the skipped one is the `-Ddoc` entry point, see "See the parse result directly" below):
 
 | Test class | Count | Coverage |
 | --- | --- | --- |
-| `WordParserTest` | 31 | docx sample end to end: 13 body paragraphs, 4 tables cell by cell, the three `FullRow` destinations, registered headers, four image modes, both entry points |
+| `WordParserTest` | 32 | docx sample end to end: 13 body paragraphs, 4 tables cell by cell, the three `FullRow` destinations, registered headers, four image modes, both entry points |
 | `PdfParserTest` | 17 | pdf sample end to end: cross-page merging, vertical-merge clustering, lost field results, registered headers switching off the first-row fallback, JPEG re-encoding |
-| `PptParserTest` | 17 | pptx sample end to end: shape order, group shapes, the two-row-header trade-off, the evaluation-mode 5-character self-check |
-| `CrossFormatTest` | 9 | Cross-format consistency: the core table identical cell by cell, image fingerprints, one reused `Options`, the contract checked across all 12 parses |
-| `TablesTest` | 31 | The header-grouping algorithm (the only copy): the six-way priority, multi-level header merging, the three destinations for full-row merges, column-name completion, grid padding |
-| `ImagesTest` | 24 | The image collection (the only copy): numbering, type normalisation and sniffing, fingerprints, duplicates, four modes, external links, file-name sanitising |
-| `OptionsTest` | 10 | `Options` semantics: tolerance, keywords, silent mode, null handling |
+| `PptParserTest` | 19 | pptx sample end to end: shape order, group shapes, the two-row-header trade-off, the evaluation-mode 5-character self-check, plus minimal pptx files assembled on the fly to prove a vertical merge does not eat data and a blank full-width merged row is not taken for a separator |
+| `PptParserTextTest` | 2 | Text-frame line splitting (package-private `textLines`): `\r\n`, `\r` and `\n` all split paragraphs, and blank paragraphs take no line. Evaluation mode returns only the first paragraph, so this test does not touch Aspose |
+| `PdfCrossPageTableTest` | 4 | A three-page table PDF built on the fly: merged into one group, `source` recording first/last page, the chain stopping when another table follows on a page, the chain also stopping when an image follows the fragment, and the evaluation watermark alone breaking the merge |
+| `PdfMergedCellTableTest` | 5 | A docx with merged cells assembled on the fly and exported to PDF: vertical and blank full-width merges are not group rows, docx and PDF agree cell by cell, both readings of a two-level header, and the watermark adding an image only |
+| `CrossFormatTest` | 15 | Cross-format consistency: the core table identical cell by cell, the measured `source` page of every group pinned, `source(false)` dropping the key in all three formats, image fingerprints, one reused `Options`, the contract checked across all 12 parses, the 12 JSON lengths quoted in the documentation pinned one by one, the `unmatchedHeaders` top-level key, and the exception types of the three parsers for a missing file |
+| `PdfBorderlessTableTest` | 5 | Borderless PDF tables: builds a docx in the test itself (borderless table + ruled table + tab-aligned rows), exports it to PDF, then checks the recovery, that the ruled table is untouched, that prose above the table is not swallowed by the table's bounding rectangle, and the one known false positive |
+| `TablesTest` | 34 | The header-grouping algorithm (the only copy): the six-way priority, multi-level header merging, the three destinations for full-row merges, column-name completion, grid padding, and that a registered name is written only on the groups that matched |
+| `ImagesTest` | 25 | The image collection (the only copy): numbering, type normalisation and sniffing, fingerprints, duplicates, four modes, external links, file-name sanitising, and that the extension does not follow the default `Locale` |
+| `OptionsTest` | 14 | `Options` semantics: tolerance, keywords, silent mode, null handling, `source` on by default and switchable off, `unmatchedHeaders` off by default, and `name` binding to the most recent registration (one-at-a-time and bulk registration are equivalent) |
+| `TableByNameTest` | 11 | Naming and name-based retrieval: which groups carry `name`, the key order `headers`/`rows`/`name`/`source`, the cross-format differences between registering the merged row and the upper row plus the dual-spelling remedy, that the default output carries no `name`, the order and null behaviour of `tablesByName`/`rowsByName`, and that a registration covered by a same-name match is no longer reported on stderr |
 | `ResultsTest` | 28 | Text cleaning, evaluation-watermark detection, header normalisation, JSON serialisation, file-name sanitising, `writeImages`, license loading |
-| `WordEdgeCasesTest` | 11 | Minimal docx files assembled on the fly to cover edge structures: content controls, nested tables, depth limits, vertical merges, fields, soft breaks |
-| `PrintResultTest` | 5 (1 skipped by default) | **Asserts nothing, only prints**: dumps the parse result of the three samples verbatim to the console, to answer "what does this document actually parse into" |
+| `WordEdgeCasesTest` | 14 | Minimal docx files assembled on the fly to cover edge structures: content controls, nested tables, depth limits (8 levels warn not at all, 9 levels warn exactly once), vertical merges, fields, soft breaks, and that a blank full-width merged row is not a separator |
+| `PrintResultTest` | 17 (1 skipped by default) | **Asserts nothing, only prints**, producing **18 reports** in four categories: (1) the full result of all three samples (silent / registered / named / DROP); (2) every public entry point (the four `parse` overloads side by side, `Options` defaults and setters, JSON serialisation and `writeImages`, retrieval by name); (3) header rules and the option matrix (four ledger registrations, 7 option sets with their scale and full JSON, the unmatched list, duplicate/blank headers and field caches); (4) the four image modes and the error paths. Each test also writes a UTF-8 copy under `target/print/` (see the next section) |
 
 `TablesTest` / `ImagesTest` / `OptionsTest` / `ResultsTest` do not touch Aspose (they are fed grids, bytes
-and minimal strings directly) and each measured under 0.05 s (31/24/10/28 cases in 0.013, 0.043, 0.000 and
-0.035 s respectively); the end-to-end classes load Aspose and the samples, the heaviest being
-`CrossFormatTest` (19.6 s, parsing all three formats repeatedly) and `PdfParserTest` (10.2 s), with a whole
-`mvn clean test` round taking 38 s.
+and minimal strings directly); in this round's single JDK 8 run they took **0.011 / 0.025 / 0.001 / 0.023 s**
+(`PptParserTextTest` also only processes strings and took **0.000 s**). The end-to-end classes load Aspose and
+the samples; the heaviest are `CrossFormatTest` **29.8 s** (parsing all
+three formats repeatedly — `documentedJsonLengthsAreTheRealOnes` alone measures 2.7 s) and `PdfParserTest`
+**14.2 s** (every page runs the table engine twice), followed by `PrintResultTest` **24.0 s** (18 reports parse
+the samples repeatedly), `TableByNameTest` **7.3 s**, `PdfCrossPageTableTest` **4.0 s**, `WordParserTest`
+**1.8 s**, `PptParserTest` **0.94 s**, `PdfBorderlessTableTest` **0.66 s** (it builds a docx and exports it to
+PDF inside the test), `PdfMergedCellTableTest` **0.34 s** and `WordEdgeCasesTest` **0.32 s**.
+The same classes in the JDK 21 round measured `CrossFormatTest` 38.3 (`documentedJsonLengthsAreTheRealOnes`
+3.5 s), `PdfParserTest` 18.5, `PrintResultTest` 22.7, `TableByNameTest` 5.7 and `PdfCrossPageTableTest` 4.8 s.
+A whole `mvn -B clean package` round (compile + test + jar) took **02:10** on JDK 8 and **02:17** on JDK 21
+in the 1.2.0 release build. The range is dominated by machine load (the same command measured 02:15–02:37 earlier while
+another process was competing for CPU; an earlier round measured 01:32–01:42 on JDK 8 and 01:55 on JDK 21,
+with `CrossFormatTest` about 10 s apart), so **read these durations as an order of
+magnitude, not as a performance-regression signal** — see §11.
 
-This round's build checks: `javac -Xlint:all` with **0** warnings, `javadoc -Xdoclint:all,-missing` with
-**0** errors, `mvn -B clean package` BUILD SUCCESS with 183 tests, 0 failures and 0 errors
-(183/183 with or without `-DargLine="-Dfile.encoding=UTF-8"`).
+This round's build checks (JDK 8): `javac -Xlint:all -Xpkginfo:always` with **0** warnings (17 classes,
+including `package-info.class`), `javadoc -Xdoclint:all,-missing` with **0** errors,
+`mvn -B clean package` BUILD SUCCESS with **242 tests**, 0 failures and 0 errors
+(1 `-Ddoc` entry skipped; 242/242 with or without `-DargLine="-Dfile.encoding=UTF-8"`), main jar
+**60236 bytes / 30 entries / 17 classes** and `major version: 52`. Do not treat the jar size as a checksum:
+comment lines shift the line-number tables in the bytecode, and packaging with a different JDK changes the
+number too — the same source gave **60236** bytes on JDK 8 and **60650** on JDK 21 in this round, while the
+entry count, the class count and the bytecode version (`major version: 52`) matched in all three places.
 
 ### See the parse result directly (printed to the console)
 
 Every other test class asserts measured values, which catches regressions but does not show you what the
 output looks like. `PrintResultTest` is for humans: run one test and the console gives you **the body text
-paragraph by paragraph, the headers and all data rows of every table group, the image metadata and the
-complete JSON**, keeping only one baseline assertion (the `headers`-vs-row-keys contract), because if the
-contract breaks the output has no reference value either.
+paragraph by paragraph, the registered name (only when you gave one) and source page of every table group,
+the headers and all data rows, the image metadata and the complete JSON**, keeping only one baseline
+assertion (the `headers`-vs-row-keys contract), because if the contract breaks the output has no reference
+value either.
 
 ```
-mvn -B test -Dtest=PrintResultTest                                    # three samples + one option comparison, 4 printouts
-mvn -B test -Dtest=PrintResultTest#printWordSample                    # docx only
+mvn -B test -Dtest=PrintResultTest                                    # all 18 reports (the commands below combined)
+
+# 1. Full result of the three samples
+mvn -B test -Dtest=PrintResultTest#printWordSample                    # docx only (silent)
+mvn -B test -Dtest=PrintResultTest#printPdfSample                     # pdf only (silent)
+mvn -B test -Dtest=PrintResultTest#printPptSample                     # pptx only (silent)
+mvn -B test -Dtest=PrintResultTest#printAllSamplesWithRegisteredNames  # "register + name" for all three samples (3 reports)
+mvn -B test -Dtest=PrintResultTest#printWordSampleWithRegisteredHeadersAndDrop  # docx registered headers + DROP
+
+# 2. Every public entry point
+mvn -B test -Dtest=PrintResultTest#printPublicApiOverloads             # four parse overloads: path/stream × options/keywords, compared on every sample
+mvn -B test -Dtest=PrintResultTest#printOptionDefaultsAndSetters       # Options defaults, tolerance, bulk registration, name binding, keywords
+mvn -B test -Dtest=PrintResultTest#printSerializationAndImageExport    # toJson + writeImages: file size and SHA-1 against contentId
+mvn -B test -Dtest=PrintResultTest#printNamedMatchesAcrossFormats      # tablesByName / rowsByName: which groups and rows each name hits
+
+# 3. Header rules and the option matrix
+mvn -B test -Dtest=PrintResultTest#printLedgerNameRemedies             # the two-row-header ledger in the docx: four registration spellings side by side
+mvn -B test -Dtest=PrintResultTest#printOptionMatrix                    # three samples × 7 option sets: groups / rows / JSON length / keys
+mvn -B test -Dtest=PrintResultTest#printAllModeJson                     # the full JSON of the same 7 option sets, plus 21 .json files
+mvn -B test -Dtest=PrintResultTest#printUnmatchedHeaders                # the unmatchedHeaders switch and the resulting list
+mvn -B test -Dtest=PrintResultTest#printHeaderAndFieldRules             # duplicate headers with a column suffix, blank headers as 列N, SUM(ABOVE) cached only
+
+# 4. Images and error paths
+mvn -B test -Dtest=PrintResultTest#printImageModes                      # META / BYTES / BASE64 / FILE
+mvn -B test -Dtest=PrintResultTest#printErrorPaths                      # exception types for missing files and FILE without imageDir
 mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/your-file.docx"   # your own document (parser chosen by extension)
 ```
 
-Clicking the run button of a single test in the IDE does the same. Output fragment (docx, silent mode):
+Clicking the run button of a single test in the IDE does the same. Output fragment (docx, silent mode;
+**the fragments in this section are translated** — the parser prints the document's own text verbatim, and
+the three samples are Chinese, so what you see on the console is Chinese):
 
 ```
 ==============================================================================
@@ -735,24 +949,91 @@ Scale: 13 body paragraphs, 7 table groups / 30 rows, 1 image
 …
 ---- tables (7 groups) ----
 
-#1  7 columns × 4 rows
+#1  7 columns × 4 rows, source {page=1}
 headers = [district, region, sales, collection rate, sales-5, collection rate-6, remark]
   row1: district=East China | region=Shanghai | sales=1280 | collection rate=92% | sales-5=1465 | collection rate-6=95% | remark=target exceeded
 …
 ---- images (1 image; META mode carries metadata only) ----
 [1] {fileName=image-1.png, type=PNG, width=1024, height=768, size=670939, contentId=487e915d…}
 
----- JSON (4409 characters) ----
+---- JSON (4740 characters) ----
 { … }
 ```
 
 Each test also writes a **UTF-8 copy** of the same output to `target/print/<sample>-<options>.txt`
 (the absolute path is printed at the end), so you can open that file when the console encoding is wrong;
-it lives under `target/` and `mvn clean` removes it. Measured character counts of the four copies this
-round: docx silent 7055, docx registered-headers+DROP 6842, pdf silent 9460, pptx silent 5215.
+it lives under `target/` and `mvn clean` removes it. Measured character counts of the **18 copies** this
+round — **191974 characters in total**, shortest 1351 and longest 106026 (`wc -m`, which includes the `\r\n`
+that Jackson's pretty-printer uses on Windows): `docx-silent` 7950,
+`docx-registered-DROP` 7640, `docx-registered-named` 8304, `pdf-silent` 10367, `pdf-registered-named` 10721,
+`pptx-silent` 5949, `pptx-registered-named` 6072, `按名字取数-三份样例` 8568,
+`docx-台账四种注册写法` 5511, `公共入口-四个重载` 1938, `选项默认值与setter` 1396,
+`表头补名与域缓存` 2409, `序列化与图片导出` 1417, `选项矩阵-三份样例` 3210,
+`全部模式-完整JSON` 106026 (the JSON bodies of three samples × 7 option sets, plus 21 per-mode `.json`
+files under `target/print/json/`), `未匹配表头-三份样例` 1727, `docx-图片四种模式` 1418 and
+`错误路径-三份样例` 1351.
 
-**BASE64 mode is not printed**: in the default `META` mode the three samples' JSON is 4409 / 6186 / 3262
-characters, which is readable; switching to `BASE64`, that 670939-byte PNG inflates the JSON to 899039
+**What the newer reports show**: `全部模式-完整JSON` prints the full JSON of the same three samples × 7 option
+sets (one summary line per mode, then the JSON) and writes 21 per-mode `.json` files, so field-by-field
+checks and diffs do not have to go through the console; `公共入口-四个重载` runs the four "path / stream × options / keywords"
+combinations on every sample and prints whether the path and stream JSON are character-for-character
+identical (all `true`); `选项默认值与setter` prints every `options()` default, the unmatched warning when
+tolerance is tightened to 0, the equivalence of `headerGroups(List)` and repeated `headers(...)`, and that
+`name(...)` binds only to the most recent registration; `表头补名与域缓存` reproduces `销售额-5` /
+`回款率-6` and the populated total row from the source documents, and builds a docx whose data is 1+2 while
+its `SUM(ABOVE)` cache says 300.00 to prove the parser reads the cache and never recomputes; and
+`序列化与图片导出` shows that all three `toJson` implementations agree, that the SHA-1 of every file written
+by `writeImages` equals its `contentId`, and that calling `writeImages` on a `META` result only warns and
+writes nothing.
+
+Once a name is registered, the title line of each group grows one more field — which is exactly what to
+read when deciding which groups to name:
+
+```
+#1  7 columns × 4 rows, name = Quarterly detail, source {page=1}
+#6  4 columns × 3 rows, name = Annual target, source {page=2}
+#7  4 columns × 2 rows, name = Annual target, source {page=2}      ← two header groups of one physical table, one shared name
+```
+
+**Do not copy `Column N` into a registration value**: it is a positional name invented for a cell whose
+title is empty in the document, not a word from the document (the group whose headers read
+`[district, annual target, completion rate, Column 4]` is registered with the first three names only, and
+the 4th column is still filled positionally as `Column 4`). Also note that `TestSupport.named()` leaves the
+ledger group unnamed in docx — only groups 1, 6 and 7 carry a `name` there; the reason and the fix are in §8.
+
+**To check "name → data" with your own eyes, run `printNamedMatchesAcrossFormats`**: for each name it prints
+the groups it hit, every row of every hit and the row count `rowsByName` flattens them to, one section per
+sample, and ends with three names that hit nothing. Measured fragment (docx):
+
+```
+---- name = "Annual target": 2 groups hit, rowsByName flattens to 5 rows ----
+  group #6 of tables, source {page=2}, 4 columns × 3 rows
+  headers = [district, annual target, completion rate, Column 4]
+    row1: district=East China | annual target=2400.00 | completion rate=101% | Column 4=on target
+    row2: district=South East China | annual target=1500.00 | completion rate=93% | Column 4=below target
+    row3: district=FY2026 (budget issued) | annual target= | completion rate= | Column 4=
+  group #7 of tables, source {page=2}, 4 columns × 2 rows
+  …
+  are rowsByName and the groups concatenated in order the very same objects: true (5 flattened / 5 concatenated)
+
+---- names that hit nothing: an empty list, never null, never an exception ----
+  rowsByName(result, "a name that was never registered") = [], 0 rows
+  rowsByName(result, "")                                 = [], 0 rows
+  rowsByName(result, null)                               = [], 0 rows
+```
+
+**Why the two-row-header ledger in the docx needs a different registration — run `printLedgerNameRemedies`
+to see the comparison**: four spellings, one section each, listing the headers and names of all 7 groups, all
+13 rows of the ledger group, the row count from `rowsByName` and stderr verbatim. The measured outcome is
+plain to read — ① default tolerance 1, registering the merged row: `groups carrying a name: (none at all)`,
+`rowsByName` **0 rows**, stderr reports the unmatched header set; ② the same registration with tolerance 2,
+③ registering the real upper row of the document, ④ registering both spellings under the same name: all three
+give `#2=Collection ledger`, `rowsByName` **13 rows** and **empty** stderr, the 13 rows are character-for-character
+identical, and neither the 7 groups' headers nor their row counts move at all (still 7 groups / 30 rows) —
+② does not drag any other group along by loosening the tolerance.
+
+**BASE64 mode is not printed**: in the default `META` mode the three samples' JSON is 4740 / 6473 / 3526
+characters, which is readable; switching to `BASE64`, that 670939-byte PNG inflates the JSON to 899370
 characters, flooding the console with nothing useful. To look at image content use `ImageMode.FILE` +
 `imageDir(File)`, and the output will carry the on-disk paths.
 
@@ -762,8 +1043,9 @@ All three parser classes are pure static methods with no container dependency an
 inspect a single document from your own code:
 
 ```java
+// the bundled sample is a Chinese document, so the keyword literal is 销售 ("sales")
 Map<String, Object> result = WordParser.parse("src/test/resources/word/sales-report.docx",
-        WordParser.options().keywords("sales").fullRow(WordParser.FullRow.DROP));
+        WordParser.options().keywords("销售").fullRow(WordParser.FullRow.DROP));
 System.out.println(WordParser.toJson(result));
 ```
 
@@ -784,7 +1066,22 @@ comparison**, so a registered group that itself ends with an empty name will nev
 does work: the docx target table's last column has no title in the document, so registering the three
 names `["district","annual target","completion rate"]` matches, and the 4th column is still filled by
 position as `Column 4`. When nothing matches, stderr shows `header set did not match any row` plus that
-group's column names — adjust the registered values accordingly.
+group's column names — adjust the registered values accordingly. The one case that stays silent is a
+registration **covered by another registration under the same `name`** that did match: when both spellings of
+a multi-level header are registered under one name, the spelling that is bound to miss in this document no
+longer makes noise.
+
+**I gave a group a name, so why is there no `name` key in the result?**
+`name` is only a label stuck on a header group that *already matched* a registration; it takes no part in
+matching and does not widen it. Three cases all leave the key out: that group was registered without a
+name; it was named but did not match in this document (stderr then prints `header set did not match any
+row` plus that group's column names, unless another registration under the same name did match); or that
+group's headers were decided by keywords, by `w:tblHeader`,
+by the row after a full-width group row, or by the first-row fallback — there is no registered group to
+compare with at all. Multi-level headers add a fourth, format-dependent case: "hits in pdf/pptx, misses in
+docx"; registering both spellings under one name fixes it, see [8. Options](#8-options).
+Retrieval always goes through `WordParser.tablesByName` / `rowsByName`, which return an empty list for a
+name that matched nothing instead of throwing.
 
 **Why is text inside tables missing from `text`?**
 By convention table content appears only in `tables` and is not duplicated. The single exception is a PDF
@@ -836,6 +1133,18 @@ These are defensive branches written from code paths; the repository has no matc
 - The **reverse** case of the silent-option PDF mis-merge where "two independent tables happen to have
   the same column count and aligned left edges" (the numbers from that time are in the appendix; they
   were produced with a throwaway probe from constructed coordinates);
+- The `page <= 0` branch of `Tables.markSource` (when no position can be given, the `source` key is not
+  written): across the 19 groups of the three samples every group yielded a page number in the measurement,
+  so this branch has never been hit; layout exceptions such as tables inside text boxes or inside
+  headers/footers wait for a sample before they can be verified;
+- The out-of-range guard in `WordParser.Options.headerName(int)` and the two guards inside
+  `tablesByName`/`rowsByName` for "`tables` is not a list" and "this element is not a map": `headerLabels`
+  and the header groups are appended one-to-one, and the `tables` in a result is always a
+  `List<Map<String,Object>>` this module put there itself, so a normal call cannot reach these lines — they
+  exist only in case the two lists fall out of step later. `TableByNameTest` covers the inputs that really
+  do occur: a null result, null/blank/unknown names, and leading/trailing spaces;
+- The guard in `PdfParser.flowTableFlow` for "a flow table exposes no valid rectangle at all": all five
+  flow tables of the probe had rectangles, so it never triggered;
 - The empty-value guard for a PPT cell without a text frame;
 - Linked images (Word "Link to File", PPT "Link only"): `ImagesTest` feeds a `link` path directly to
   verify the metadata shape, but none of the three samples contains a real linked image;
@@ -855,7 +1164,7 @@ Requirements for external contributors (environment, code conventions, PR flow, 
 | File | Responsibility |
 | --- | --- |
 | `WordParser` / `PdfParser` / `PptParser` | Only "read their own format into a `String[][]` grid + paragraphs + image bytes", plus their own `Options` entry points |
-| `Tables` | The header-grouping algorithm (the only copy): detection priority, multi-level header merging, where full-row merges go, column-name completion (empty header → `Column N`, duplicate name → column-number suffix; `headers` and row keys share one source) |
+| `Tables` | The header-grouping algorithm (the only copy): detection priority, multi-level header merging, where full-row merges go, column-name completion (empty header → `Column N`, duplicate name → column-number suffix; `headers` and row keys share one source), and writing `name` on a registered hit (`markName`) |
 | `Images` | The image collection (the only copy): file names, metadata, content fingerprints, duplicates, four output modes |
 | `Results` | Shared utilities: JSON serialisation, text cleaning (field codes / soft breaks) and evaluation-watermark filtering, header normalisation, license loading, file-name sanitising before writing |
 
@@ -876,18 +1185,38 @@ elements in `tables` as it has header groups; inside one group every row has the
 `headers` equals each row's keys item by item (empty headers become `Column N`, duplicates become
 `name-columnNumber`, and both rules share one implementation in `Tables.normalizeHeaders`); when a
 registered header matches, the registered names are used (which is why the keys are the same across the
-three formats); text inside tables is not repeated in `text`; image order = document-flow order.
+three formats); text inside tables is not repeated in `text`; image order = document-flow order;
+`source.page` means the same thing in all three formats (page number / slide index, 1-based) and is
+written uniformly by `Tables.markSource` — the grouping algorithm `Tables.group` never touches it.
+`Options.source(false)` makes that key disappear for **all three formats together**, leaving each group with
+just `headers` and `rows`; every other part of the contract is unchanged (each parser asks
+`Options.writesSource()` first, and the Word side consequently never creates a `LayoutCollector`).
+The key order inside a group is fixed: `headers` → `rows` → `name` (present only when the group was
+registered, named, and matched) → `source` (present only under `source(true)`). `name` is written by
+`Tables.group` at the moment a registered group matches (`markName`) — `markName` inside the grouping and
+`markSource` outside it is deliberate: only the grouping knows which group matched, only the layout knows
+the page. A new format has to do neither, it just hands `Options` to `Tables.group`; but do **not**
+implement naming or page tracking a second time inside some parser, or the three formats diverge again.
+**Registered names are part of the external contract too**: downstream code fetches rows with
+`WordParser.tablesByName` / `rowsByName`, so renaming a group or changing what matches is as breaking as
+changing a column name.
 
 **After changing a sample**: every expected value was measured, so after changing a sample run the
 corresponding test class, update the assertions from the new output, then sync the numbers in the two
 "Measured baselines" tables; the sample numbers quoted in the javadoc (the three parser class docs,
 `Results`, `Images`, `package-info`) must be updated too.
 
+**Externally visible changes go in the changelog**: whenever a key in the returned structure, a method on
+`Options`, a public entry point or a documented behaviour changes, add an entry to the unversioned section at the top
+of both [CHANGELOG.md](CHANGELOG.md) and [CHANGELOG.en.md](CHANGELOG.en.md) with the measured numbers from
+the three samples; only at release time is that section folded into a version entry and the `pom.xml`
+version bumped. Pure internal refactoring and comment-only changes are not recorded.
+
 ## 17. Build and publishing
 
 ```
-mvn -B clean test          # JAVA_HOME pointing at JDK 8; this round measured 183 tests passing (1 -Ddoc entry skipped)
-mvn -B clean package       # artifact target/document-parser-1.1.1.jar (56275 bytes, 30 entries, 17 classes;
+mvn -B clean test          # JAVA_HOME pointing at JDK 8; this round measured 242 tests passing (1 -Ddoc entry skipped)
+mvn -B clean package       # artifact target/document-parser-1.2.0.jar (measured this round: 60236 bytes, 30 entries, 17 classes;
                            # classes live directly under cn/net/tianxi/document/ at the jar root;
                            # the prepare-package phase copies the root LICENSE and NOTICE into META-INF/,
                            # so consumers who only get the jar still see the attribution and third-party license notes)
@@ -941,7 +1270,7 @@ The private key on this machine has **no passphrase** (so the build can run full
 one: `gpg --edit-key 41AF7E29CB53074D` → `passwd`, then put the passphrase in settings.xml under
 `<server><id>gpg</id><passphrase>`.
 
-There are two publishing routes; 1.1.1 used the first (**it does not require putting the token on disk**):
+There are two publishing routes; 1.1.1 and 1.2.0 both use the first (**it does not require putting the token on disk**):
 
 **A. Build the bundle locally + upload through the Portal web UI**
 
@@ -955,7 +1284,7 @@ under `cn/net/tianxi/document-parser/1.1.1/`, the `document-parser-1.1.1.jar` (5
 `md5/sha1/sha256/sha512` checksums.
 
 Then go to Portal → **Publishing → Publish Component**: fill in the Deployment Name (e.g.
-`document-parser 1.1.1 (cn.net.tianxi)`) and a description, choose this zip, and click Publish Component.
+`document-parser 1.2.0 (cn.net.tianxi)`) and a description, choose this zip, and click Publish Component.
 After submitting, a **VALIDATING** record appears in the Deployments list (this one's Deployment ID was
 `960f618b-cb17-4cb1-9d40-96849df2a219`); once validation passes, a **Publish** button appears on the same
 row, and clicking it is what actually makes it public.
@@ -1004,7 +1333,8 @@ https://repo1.maven.org/maven2/cn/net/tianxi/document-parser/1.1.1/
 
 1.1.1 went through the whole flow and was **verified by measurement**: Portal Deployment
 `960f618b-cb17-4cb1-9d40-96849df2a219` reached status PUBLISHED, and the jar / sources.jar / javadoc.jar
-byte counts listed in that directory match the local artifacts (56275 / 64964 / 141571); then, using a
+byte counts listed in that directory match the local artifacts **of that build** (56275 / 64964 / 141571);
+then, using a
 **brand-new empty local repository**, `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.1.1
 -Dtransitive=false` was run (`-Dmaven.repo.local` pointed at a temporary directory so it could not hit an
 already-installed artifact of the same name), giving BUILD SUCCESS, and the downloaded jar was
@@ -1013,14 +1343,30 @@ sha256 `c2c47ba92823ee9464a9a80bb6125ee8b8aa34f562ee80d76f709df3ce233148` — id
 places: Central's `.sha256`, the local artifact and the GitHub Release attachment. The temporary
 repository was deleted afterwards.
 
+> **Version / artifact consistency**: this README and the changelog now describe **1.2.0**. The 1.1.1 on
+> Maven Central (main jar 56275 bytes) does **not** contain the `source` / `name` / `unmatchedHeaders` keys or
+> borderless-table recovery; 1.2.0 exists precisely to close that gap.
+
+### 1.2.0 (2026-10-23)
+
+`pom.xml` is now `1.2.0`; a local `mvn -B clean package` produces a **60236-byte** main jar on JDK 8
+(**60650 bytes** for the same source on JDK 21) with 30 entries and 17 classes, and all 242 tests pass.
+The sources and javadoc jars are produced by the `release` profile at package time.
+
+**Upload and verification record pending**: the Portal Deployment ID, the byte counts and sha256 of the
+three artifacts, and the result of `mvn dependency:get -Dartifact=cn.net.tianxi:document-parser:1.2.0
+-Dtransitive=false` against a brand-new empty local repository will be recorded here once the upload
+succeeds and `repo1.maven.org` has caught up.
+
 **One thing consumers must know**: the three Aspose artifacts are not on Maven Central, so anyone
 depending on `document-parser` must declare `https://repository.aspose.com/repo/` in their own pom as
 shown in section 5.1, otherwise dependency resolution fails.
 
-After publishing to Central, a GitHub Release `v1.1.1` was created (the tag was already pushed) with the
-jar, sources.jar and javadoc.jar attached, so people not using Maven can download them directly:
+After 1.1.1 was published to Central, a GitHub Release `v1.1.1` was created with the jar, sources.jar and
+javadoc.jar attached, so people not using Maven can download them directly:
 [v1.1.1](https://github.com/hutianxi/document-parser/releases/tag/v1.1.1) is published and all three
-attachments are in Assets (the sha256 shown by GitHub matches the local artifacts).
+attachments are in Assets (the sha256 shown by GitHub matches the local artifacts). The 1.2.0 release will
+carry the same three artifacts once the Central upload succeeds.
 
 ## 18. Appendix: fix log (historical numbers)
 

@@ -4,18 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * {@link Results} 的单元测试：文本清洗、评估水印识别、表头归一化、文件名消毒、许可证加载、写图片。
@@ -50,6 +42,8 @@ class ResultsTest {
         // 软换行 <0B>、分页符 <0C>、段落结束 <0D>：换成空格而不是丢掉，否则 Shift+Enter 分的两行会粘成一句
         assertEquals("第一行 第二行", Results.clean("第一行\u000b第二行\r"));
         assertEquals("上一页 下一页", Results.clean("上一页\u000c下一页"));
+        // <0A> 也走同一条规则：clean 是三个解析器共用的那一道，换行的写法不止 <0D> 一种
+        assertEquals("标题 副标题", Results.clean("标题\n副标题"));
     }
 
     @Test

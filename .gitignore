@@ -22,3 +22,17 @@ release.properties
 .DS_Store
 Thumbs.db
 *.log
+
+### Office 临时所有权文件（打开 src/test/resources 下的样例时会产生）###
+~$*
+
+# AOCI agent host integration (machine-bound; do not commit)
+.mcp.json
+.mcp.json.backup.*
+.aoci/
+AGENTS.md
+aoci*.txt
+.gitattributes
+
+# Qoder 会话产物（canvas 快照、额度报告，与项目无关）
+.qoder-credits/
