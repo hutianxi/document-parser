@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/JDK-8%2B-orange.svg)](#3-tech-stack-and-requirements)
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-1.2.0-green.svg)](#17-build-and-publishing)
+[![Maven Central](https://img.shields.io/badge/Maven%20Central-1.2.1-green.svg)](#17-build-and-publishing)
 [![Tests](https://img.shields.io/badge/tests-241%20passed-brightgreen.svg)](#13-testing-and-quality)
 
 [中文](README.md) ｜ **English**
