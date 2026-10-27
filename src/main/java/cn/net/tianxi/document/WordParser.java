@@ -692,7 +692,9 @@ public final class WordParser {
         }
 
         /**
-         * {@link ImageMode#FILE} 时图片写到的目录，不存在会在解析时创建。
+         * {@link ImageMode#FILE} 时图片写到的目录；不存在时在写第一张图前创建（含父目录），
+         * 没有图片要写就不会创建。传 null 等同没配，此时 {@link ImageMode#FILE} 会在遇到第一张图时抛
+         * {@link IllegalStateException}。
          */
         public Options imageDir(File directory) {
             this.imageDir = directory;
@@ -713,7 +715,7 @@ public final class WordParser {
          *
          * <p>PDF 与 PPT 的页码是解析过程中本来就有的（{@code Page} 的下标、幻灯片的下标），不额外花钱，
          * 但这个键名与含义三种格式一致，所以开关对三种格式<b>一起生效</b>：关掉以后三种格式都不写 {@code source}，
-         * 结果里每组只剩 {@code headers} 与 {@code rows} 两个键。
+         * 没有起过名的组只剩 {@code headers} 与 {@code rows} 两个键（起过名的组仍有 {@code name}）。
          */
         public Options source(boolean enabled) {
             this.source = enabled;
@@ -929,8 +931,11 @@ public final class WordParser {
     /**
      * 把 {@link ImageMode#BASE64} 结果里的图片落成文件；用 {@link ImageMode#FILE} 解析时不需要再调它。
      *
-     * @param result    {@link #parse} 的返回值
-     * @param directory 输出目录，不存在时创建
+     * <p>只处理带 {@code base64} 的条目；{@code result} 里没有 {@code images} 列表时静默返回。
+     * 文件名取结果里的 {@code fileName}，目录成分会被去掉，重名加 {@code -2}、{@code -3} 后缀，不覆盖已有文件。
+     *
+     * @param result    {@link #parse} 的返回值，不能为 null
+     * @param directory 输出目录，不存在时在写第一张图前创建；不要传 null（会写到进程当前工作目录）
      */
     public static void writeImages(Map<String, Object> result, File directory) throws Exception {
         Results.writeImages(result, directory);

@@ -205,6 +205,7 @@ document-parser/
 ├── docs/index.html                          # GitHub Pages 项目主页
 ├── docs/excel-parser-selection.md           # Excel 解析选型报告（POI/EasyExcel/FastExcel/Aspose.Cells 实测对比），不进 jar
 ├── docs/json-to-db.md                       # JSON 入库示例：按表头签名路由、类型转换、整表原子写，不进 jar
+├── docs/feature-guide.md                    # 功能说明书：逐接口逐参数、返回字段、三份样例完整数据、验收方法，不进 jar
 ├── .gitignore                               # target/、*.lic（私有凭证）、GPG 签名产物、IDEA 工程文件、Office 临时文件 ~$*
 └── src
     ├── main/java/cn/net/tianxi/document
@@ -349,6 +350,9 @@ mvn -B test -Dtest=PrintResultTest#printAnyDocument -Ddoc="D:/你的文档.docx"
 
 `parse` / `toJson` / `writeImages` 都 `throws Exception`：解析的是外部文档，损坏文件、加密文件、
 格式与扩展名不符都会抛出来，由调用方决定怎么兜（`options()` 与各链式方法不抛）。
+
+每个接口每个参数怎么传、每个返回字段是什么意思、三份样例解析出的完整数据，另见
+[功能说明书](docs/feature-guide.md)。
 
 ## 7. 返回结构详解
 
@@ -589,7 +593,7 @@ META 模式得到 **4409／6186／3262**，与上表相减就是 331／287／264
 | 注册名覆盖文档里读到的列名 | 默认容忍 1 列不一致：把 `备注` 注册成 `说明` 仍命中，结果里的列名用注册的 `说明`（PDF 的单元格文字会因换行多出空格，比对时忽略空格） | `WordParserTest.registeredHeadersOverrideTheNamesReadFromTheDocument`、`TablesTest.registeredHeadersOverrideTheNamesReadFromTheGrid` |
 | 未匹配的注册表头会提示 | 标准错误上出现 `表头集合未匹配到任何行` + 那组列名；PDF／PPT 上提示的是 `故障部件`（嵌套小表在这两种格式里不存在），Word 上**不提示**（`named()` 的五组注册全部命中，标准错误为空）。**同名之下已有一份注册命中时不再提示** —— 把上下两种写法注册成同一个 `name` 之后，注定命不中的那一份不再刷噪声；没起名字的注册不受这条影响 | 三个解析器各一条 `unmatchedHeaderGroupIsReportedOnStderr`、`TableByNameTest.aRegistrationCoveredByASameNameMatchIsNoLongerReportedOnStderr` |
 | 每组带来源页 `source` | docx：核心表第 1 页、台账 `{"page":1,"lastPage":2}`、其余 5 组第 2 页（嵌套子表与母表同页）；pdf：前两组第 1 页（台账跨到第 2 页）、工单第 2 页、后三组第 3 页；pptx：`page` 是幻灯片序号 1／2／3。同一张物理表切出的几组写同一段页码 | `CrossFormatTest.sourceRecordsThePageEachBlockStartsOn` |
-| `source(false)` 三种格式一起关 | 关掉之后每组只剩 `headers` 与 `rows` 两个键，列名与内容一字不变；docx 因此不建 `LayoutCollector`（同一 JVM 里开／关交替实测 11–35ms 对 74–254ms） | `CrossFormatTest.sourceSwitchOffDropsTheKeyFromAllThreeFormats`、`OptionsTest.sourceIsWrittenByDefaultAndCanBeSwitchedOff` |
+| `source(false)` 三种格式一起关 | 关掉之后没有起名的组只剩 `headers` 与 `rows` 两个键（起过名的组仍有 `name`），列名与内容一字不变；docx 因此不建 `LayoutCollector`（同一 JVM 里开／关交替实测 11–35ms 对 74–254ms） | `CrossFormatTest.sourceSwitchOffDropsTheKeyFromAllThreeFormats`、`OptionsTest.sourceIsWrittenByDefaultAndCanBeSwitchedOff` |
 | 注册时起名写 `name` 键 | 只有「命中注册组且注册时起了名」的那几组多一个 `name`，键顺序固定 `headers` → `rows` → `name` → `source`；没起名的组与靠关键字／兜底判出来的组一个键都不多（关掉 `source` 后是 `[headers, rows, name]`）。docx 第 6、7 组带的是<b>同一个</b> `name`（同一张物理表切出的两组表头），`rowsByName` 把两组 5 行按组顺序拼平、返回的还是结果里的同一批对象。`tablesByName`／`rowsByName` 对未知名、空白、null 一律给空列表 | `TableByNameTest`（11 条）、`TablesTest.aRegisteredNameIsWrittenOnlyOnTheGroupsThatMatched`、`OptionsTest.nameBindsToTheGroupRegisteredJustBeforeIt` |
 | 多级表头按哪一种写法注册（跨格式差异） | 注册「合并后那一行」（`客户名称/合同金额/已回款/回款率/备注`）：三种格式都命中，容忍度收到 0 也命中，台账行数 docx 13／pdf 31／pptx 7。注册「上层那一行」：docx 命中（13 行，上下两行都带 `w:tblHeader` 标记、照样合并）、pptx 命中但下层那行落进数据（7 → 8 行）、pdf 命不中（它的网格里只有合并后那一行，标准错误提示一条）。跨格式共用一份注册时把上下两种写法都注册、起同一个名字最稳：三份样例都带上 `name`，组数与行数不变（30／45／21） | `TableByNameTest.aMultiLevelHeaderHitsByItsMergedRowInAllThreeFormats`、`TableByNameTest.aRegistrationCoveredByASameNameMatchIsNoLongerReportedOnStderr` |
 | PDF 无边框表补读 | 临时探针实测（跑完已删，同一份版面现在由 `PdfBorderlessTableTest` 守住）：Word 导出的「无边框 5×3 表 + 有线 5×3 表」默认只读到 1 张、加流式引擎读到 3 张；但**整体切换**会把全有线的仓库样例从 8 块读成 5 张并读坏（合并行左移、目标表多一列空列、嵌套行插错行次，35 格里 2 格、38 格里 12 格矩形无效），所以只收「每行格数相同 + 不与有线表重叠」的，仓库样例 5 张流式表全被挡掉、结果不变 | `PdfBorderlessTableTest.borderlessTableIsRecoveredAsAThreeColumnGrid`、`ruledTableOnTheSamePageIsUnaffected`、`nothingElseBecomesATable` |

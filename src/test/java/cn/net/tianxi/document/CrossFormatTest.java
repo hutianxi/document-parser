@@ -116,7 +116,7 @@ class CrossFormatTest {
 
     @Test
     void sourceSwitchOffDropsTheKeyFromAllThreeFormats() throws Exception {
-        // 开关对三种格式一起生效：关掉之后每组只剩 headers 与 rows 两个键，其余内容一字不变
+        // 开关对三种格式一起生效：关掉之后没有起名的组只剩 headers 与 rows 两个键，其余内容一字不变
         // （docx 因此连 LayoutCollector 都不建，同一 JVM 里开／关交替实测 11–35ms 对 74–254ms，见 README §1.1）
         for (String sample : TestSupport.ALL_SAMPLES) {
             Map<String, Object> result = parse(sample, WordParser.options().source(false));

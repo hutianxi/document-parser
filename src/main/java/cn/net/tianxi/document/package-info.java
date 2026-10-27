@@ -51,7 +51,8 @@
  * docx 是 {@code LayoutCollector} 算出的页码、pdf 是页码、pptx 是幻灯片序号，都从 1 起，
  * 给不出位置的格式整键不写。同一张物理表切出的多组写同一段页码（组按表头切，不按页切）。
  * 不需要回填原文位置时 {@link cn.net.tianxi.document.WordParser.Options#source(boolean) Options.source(false)}
- * 把这个键关掉 —— 三种格式一起生效，关掉后每组只剩 {@code headers} 与 {@code rows}，Word 侧连版面都不算。
+ * 把这个键关掉 —— 三种格式一起生效，没有起过名的组只剩 {@code headers} 与 {@code rows}（起过名的组仍有 {@code name}），
+ * Word 侧连版面都不算。
  *
  * <p>{@code name} 是<b>可选</b>的第二层标识：注册表头时用
  * {@link cn.net.tianxi.document.WordParser.Options#name(String) Options.name(String)} 给那一组起名，

@@ -53,7 +53,7 @@ javadoc -encoding UTF-8 -charset UTF-8 -Xdoclint:all,-missing \
    空表头补 `列N`、同名列补 `名-列号`；表格里的文字不在 `text` 里重复；图片顺序 = 文档流顺序。
    每组的 `source`（`page` / 跨页再加 `lastPage`）由 `Tables.markSource` 统一写、各解析器在分组之后补，
    `Tables.group` 本身不碰版面信息；`Options.source(false)` 时三种格式一起不写这个键，
-   每组只剩 `headers` 与 `rows`——除这一键的有无，其余契约不变。
+   没有起过名的组只剩 `headers` 与 `rows`（起过名的组仍有 `name`）——除这一键的有无，其余契约不变。
    每组的键顺序固定 `headers` → `rows` → `name` → `source`，`name` 由 `Tables.group` 在命中注册组的那一刻写
    （只有命中注册组的组有，所以 `markName` 在分组内部、`markSource` 在分组外部）。
    **注册名是对外契约的一部分**：下游按 `tablesByName` / `rowsByName` 取数，改名字或改命中口径都会让别人的代码断掉。

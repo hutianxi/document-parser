@@ -113,6 +113,9 @@ final class Results {
      *
      * <p>只有 {@code BASE64} 模式的结果里带 {@code base64} 字段，其他模式（含默认的 {@code META}）
      * 这里无内容可写，会在标准错误提示一句而不是安静地什么都不做。
+     *
+     * <p>目录只在真的写文件时创建；{@code directory} 传 null 时 {@code new File(null, name)} 会落到
+     * 进程当前工作目录，不报错，所以对外入口要求调用方显式给目录。
      */
     static void writeImages(Map<String, Object> result, File directory) throws Exception {
         Object list = result.get("images");
